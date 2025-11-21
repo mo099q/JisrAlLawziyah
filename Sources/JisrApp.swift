@@ -63,7 +63,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
         let dist = location.distance(from: targetLocation) / 1000
-        DispatchQueue.main.async { self.distanceText = dist < 0.5 ? "وصلت" : String(format: "%.1f كم", dist) }
+        DispatchQueue.main.async { self.distanceText = dist < 0.5 ? "أنت في المنتج" : String(format: "%.1f كم", dist) }
     }
 }
 
@@ -102,7 +102,7 @@ struct MainTabView: View {
                 .tabItem { Label("الخدمات", systemImage: "bell.badge.fill") }
             
             BudgetView()
-                .tabItem { Label("الألعاب", systemImage: "gamecontroller.fill") }
+                .tabItem { Label("الميزانية", systemImage: "gamecontroller.fill") }
         }
         .accentColor(.yellow)
     }
@@ -118,7 +118,7 @@ struct HomeView: View {
     @StateObject var locationManager = LocationManager()
     
     // روابط صور ثابتة وموثوقة (Unsplash)
-    let mainImage = "https://images.unsplash.com/photo-1600607686527-6fb886090705?w=800&q=80" // مدخل حجري فاخر
+    let mainImage = "https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/images/31388400/f042a6be-4fe7-4dd6-bab8-f616164243ca/image.jpeg?AWSAccessKeyId=ASIA2F3EMEYE3EBVVK2Z&Signature=Z8vczBwt0nst0Yv3v1FPn8Co5pA%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEEsaCXVzLWVhc3QtMSJHMEUCICZDMlhk6yceFga0PYRMLWDlgTbx93eIv3p%2BUOTZcz2wAiEA0Lv80Fu12tB2lw0sjO0cPu2HYqvnhUBReWUuv9jsMa8q8wQIExABGgw2OTk3NTMzMDk3MDUiDAw65d%2Bfrn97sZu3qSrQBJe%2BBPfPOmbb%2FTpWcNRc00FjqF8B0ejvBxO9TLJuyYh6Vzjt3%2FPreA%2BLxaPfSd5qtGeEqw%2FOXWkN0%2FcFFZADsL8TilO3ON39ds%2B35W6oHI0ALI6nQitb%2BHnTZ02nd13r2b0ew5HlMqYWb44qrkqsI0Ep9maMzODonzRyFEEQgRJZyuxavG5LGlfilQTGeSp6dI1Nco8pW6lygAOhnM1iHqqbD76eyhvOGW9yp6xi8rBLNUniK%2BCXblx22Xl1iGh%2FOy6fludZwfOkM3TcUz4pHXGULXKTkSRWIksIL859fd%2B7%2BtUtbhxC8O253Q0eWi0rZW%2Fih4a8biEttTjKxkUBhcFcLhyYDUq4ALYiJcAk6yDf39EfL1Sno91QBDi%2FXXp2iU8O7pwGR1ve7vEqQa0cS9RTTs%2F9hSZ1QxksrOFYdOoXzHd%2FQ5eqYFx9asT838%2BoqFhtyVTdYZp%2F7XZVaIHhSU%2F5fEn3qBOuljF4Riez%2Fxx8yPE40iuYgUlK9DYAiK09d%2FZfJqRzGqQkq8vnvkjlx1Y5TnB0YZmylpupv4Audac8DdENv5Ug0GplL3JireSrdyURFkUjCRTsHMJZaz5ctDkh%2Bm5sBmJhH1N%2B%2FUmwMa7F49kQpU3PL4w6krXXMAp%2Fcq2n8k5jTgcoREedpNvM2B1hBDFt8ZFO4LdcUIsDh9f33pcXR55u4ltQ4dmkpBxds%2BHZhmf2yaChyCfDnwELVO5DkbZpnSiV%2B09iRcVu2rpv3yDaioyN5TExvpj%2F1KDheB8SSs0QyYDZtuzpFpMvd24wwdmCyQY6mAHZnJ%2FnCCIij%2Fi%2BGaVbXHvZxKeMczm7xXAddMo8n0%2Ft%2BXwz6XsENeWIqSJ0AvGaL%2Bs80IGZ3tLgzRs7848cMmSgZA9mpC3t4m%2FjmMmmO1IiUILI7S72XMH8JQNZkKkx0zZUONiob9RaqGOLIEh%2B4bW3lxRV5lLXryygOUZ57G7930DG%2FjPa9fowenMvLxYkH0ZgZd7wB%2BqVOg%3D%3D&Expires=1763751492&utm_source=perplexity" // مدخل حجري فاخر
     let googleMapsLink = URL(string: "https://www.google.com/maps/search/?api=1&query=21.1224671,40.3190809")!
 
     var body: some View {
@@ -244,7 +244,7 @@ struct HomeView: View {
 struct BookingListView: View {
     // صور تعبيرية دقيقة (Unsplash)
     let sessions = [
-        SessionType(name: "البلورات (القباب)", price: 80, features: "تكييف • إطلالة • ضيافة", imageURL: "https://images.unsplash.com/photo-1649170343284-5806dd601e3c?w=800&q=80"),
+        SessionType(name: "البلورات", price: 80, features: "تكييف • إطلالة • ضيافة", imageURL: "https://images.unsplash.com/photo-1649170343284-5806dd601e3c?w=800&q=80"),
         SessionType(name: "الأكواخ الريفية", price: 100, features: "مطلة على النهر • خصوصية", imageURL: "https://images.unsplash.com/photo-1587061949409-02df41d5e562?w=800&q=80"),
         SessionType(name: "بيوت الشعر", price: 90, features: "جلسة تراثية • دافئة", imageURL: "https://images.unsplash.com/photo-1550586678-f7b288a2983b?w=800&q=80")
     ]
@@ -275,7 +275,7 @@ struct BookingListView: View {
 struct ServicesView: View {
     let services = [
         ServiceItem(name: "طلب قهوة/شاي", icon: "cup.and.saucer.fill"),
-        ServiceItem(name: "طلب جمر", icon: "flame.fill"),
+        ServiceItem(name: "طلب عشاء", icon: "flame.fill"),
         ServiceItem(name: "طلب بطانيات", icon: "bed.double.fill"),
         ServiceItem(name: "مساعدة موظف", icon: "figure.wave")
     ]
@@ -396,7 +396,7 @@ struct BudgetView: View {
                         VStack(alignment: .leading, spacing: 20) {
                             Text("🧮 حاسبة التكلفة").font(.headline).foregroundColor(.gray)
                             
-                            HStack { Text("الدخول (15/فرد)"); Spacer(); Stepper("\(people)", value: $people, in: 1...50) }
+                            HStack { Text("الدخول (15/فرد)"); Spacer(); Stepper("\(people)", value: $people, in: 0...50) }
                             HStack {
                                 Text("الجلسة"); Spacer()
                                 Picker("", selection: $sessionPrice) {
