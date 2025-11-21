@@ -16,3 +16,4 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        NSLocationWhenInUseUsageDescription: "نحتاج معرفة موقعك لحساب المسافة بينك وبين الجسر."
