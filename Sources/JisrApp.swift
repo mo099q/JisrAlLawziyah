@@ -213,9 +213,9 @@ struct HomeView: View {
 // --- 2. الحجوزات ---
 struct BookingView: View {
     let sessions = [
-        SessionType(name: "البلورات (القباب)", price: 80, features: "شاملة الضيافة • إطلالة بانورامية", imageURL: "https://images.unsplash.com/photo-1533240332313-0db49b459ad6?w=800&q=80"),
-        SessionType(name: "بيوت الشعر", price: 90, features: "شاملة الضيافة • جلسة تراثية", imageURL: "https://images.unsplash.com/photo-1500375592092-40eb2168fd21?w=800&q=80"),
-        SessionType(name: "الأكواخ الريفية", price: 100, features: "شاملة الضيافة • على النهر", imageURL: "https://images.unsplash.com/photo-1445019980597-93fa8acb746c?w=800&q=80")
+        SessionType(name: "البلورات (القباب)", price: 80, features: "شاملة الضيافة • إطلالة ", imageURL: "https://images.unsplash.com/photo-1533240332313-0db49b459ad6?w=800&q=80"),
+        SessionType(name: "بيوت الشعر", price: 90, features: "شاملة الضيافة • جلسة شعبية", imageURL: "https://images.unsplash.com/photo-1500375592092-40eb2168fd21?w=800&q=80"),
+        SessionType(name: "الأكواخ الريفية", price: 100, features: "شاملة الضيافة • على البحيرة", imageURL: "https://images.unsplash.com/photo-1445019980597-93fa8acb746c?w=800&q=80")
     ]
     
     var body: some View {
@@ -267,7 +267,7 @@ struct BudgetView: View {
         GamePackage(pay: 750, get: 1000, color: .red)
     ]
     
-    @State private var numberOfPeople = 1
+    @State private var numberOfPeople = 0
     @State private var selectedPackage = 0 // Index
     @State private var sessionHours = 0
     @State private var sessionPrice: Double = 80 // Default to Crystals
@@ -291,7 +291,7 @@ struct BudgetView: View {
                         // 1. الدخول
                         VStack(alignment: .leading) {
                             Text("🎟 تذاكر الدخول (15 ريال/فرد)").bold().foregroundColor(.white)
-                            Stepper("عدد الأشخاص: \(numberOfPeople)", value: $numberOfPeople, in: 1...20)
+                            Stepper("عدد الأشخاص: \(numberOfPeople)", value: $numberOfPeople, in: 0...20)
                                 .padding().background(Color.white).cornerRadius(10).foregroundColor(.black)
                             Text("الأطفال < سنتين وذوي الهمم مجاناً").font(.caption).foregroundColor(.green)
                         }
