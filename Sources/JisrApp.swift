@@ -20,56 +20,78 @@ struct Review: Identifiable {
     let stars: Int
 }
 
-// --- مدير الطقس ---
+// --- مدير الطقس (محدث) ---
 class WeatherManager: ObservableObject {
     @Published var temperature: String = "--"
-    @Published var icon: String = "cloud"
+    @Published var icon: String = "cloud.fill"
     
     func fetchWeather() {
-        // إحداثيات الشفا الدقيقة
-        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=21.0635&longitude=40.3589&current_weather=true"
+        // رابط API محدث ومباشر لمنطقة الشفا
+        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=21.06&longitude=40.36&current_weather=true"
+        
         guard let url = URL(string: urlString) else { return }
-        URLSession.shared.dataTask(with: url) { data, _, _ in
-            guard let data = data, let decoded = try? JSONDecoder().decode(WeatherResponse.self, from: data) else { return }
-            DispatchQueue.main.async {
-                self.temperature = "\(Int(decoded.current_weather.temperature))°C"
-                self.icon = decoded.current_weather.temperature > 25 ? "sun.max.fill" : "cloud.fog.fill"
+        
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            if let error = error {
+                print("خطأ في الطقس: \(error.localizedDescription)")
+                return
+            }
+            guard let data = data else { return }
+            
+            do {
+                let decoded = try JSONDecoder().decode(WeatherResponse.self, from: data)
+                DispatchQueue.main.async {
+                    self.temperature = "\(Int(decoded.current_weather.temperature))°C"
+                    // تغيير الأيقونة حسب درجة الحرارة
+                    if decoded.current_weather.temperature > 25 {
+                        self.icon = "sun.max.fill"
+                    } else if decoded.current_weather.temperature < 15 {
+                        self.icon = "cloud.fog.fill" // ضباب للجو البارد
+                    } else {
+                        self.icon = "cloud.sun.fill"
+                    }
+                }
+            } catch {
+                print("خطأ في قراءة بيانات الطقس: \(error)")
             }
         }.resume()
     }
 }
 
-// --- مدير الموقع والمسافة (جديد) ---
+// --- مدير الموقع (محدث) ---
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
-    @Published var distanceText: String = "حساب المسافة..."
+    @Published var distanceText: String = "جاري الحساب..."
     
-    // إحداثيات جسر اللوزية
-    let targetLocation = CLLocation(latitude: 21.0635, longitude: 40.3589)
+    // إحداثيات جسر اللوزية التقريبية (الشفا)
+    let targetLocation = CLLocation(latitude: 21.0667, longitude: 40.3667)
     
     override init() {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.requestWhenInUseAuthorization() // طلب الإذن
+        manager.requestWhenInUseAuthorization() // طلب الإذن من المستخدم
         manager.startUpdatingLocation()
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let userLocation = locations.last else { return }
         
-        // حساب المسافة بالكيلومتر
+        // حساب المسافة
         let distanceInMeters = userLocation.distance(from: targetLocation)
         let distanceInKm = distanceInMeters / 1000
         
         DispatchQueue.main.async {
             self.distanceText = String(format: "يبعد %.1f كم", distanceInKm)
         }
+        manager.stopUpdatingLocation() // نوقف التحديث لتوفير البطارية
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("خطأ في تحديد الموقع: \(error.localizedDescription)")
-        DispatchQueue.main.async { self.distanceText = "الموقع غير متاح" }
+        print("فشل تحديد الموقع: \(error.localizedDescription)")
+        DispatchQueue.main.async {
+            self.distanceText = "الموقع غير مفعل"
+        }
     }
 }
 
@@ -82,31 +104,29 @@ struct JisrApp: App {
 
 struct ContentView: View {
     @StateObject var weatherManager = WeatherManager()
-    @StateObject var locationManager = LocationManager() // تفعيل مدير الموقع
+    @StateObject var locationManager = LocationManager()
     
     @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 21.0635, longitude: 40.3589),
+        center: CLLocationCoordinate2D(latitude: 21.0667, longitude: 40.3667),
         span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
     )
-    let locations = [LocationPoint(name: "جسر اللوزية", coordinate: CLLocationCoordinate2D(latitude: 21.0635, longitude: 40.3589))]
+    let locations = [LocationPoint(name: "جسر اللوزية", coordinate: CLLocationCoordinate2D(latitude: 21.0667, longitude: 40.3667))]
     
     // متغيرات الحجز
     @State private var guestName = ""
     @State private var guestCount = ""
     @State private var bookingDate = Date()
     
-    // آراء الزوار
-    let reviews = [
-        Review(name: "محمد العمري", comment: "المكان رائع جداً والأجواء خيالية وسط الضباب.", stars: 5),
-        Review(name: "سارة فهد", comment: "القهوة ممتازة، أنصح بزيارته وقت العصر للاستمتاع بالغروب.", stars: 5),
-        Review(name: "خالد", comment: "تجربة الجسر المعلق كانت ممتعة وفريدة من نوعها.", stars: 4)
+    // روابط الصور (استخدمت صور مشابهة جداً لصورك من الإنترنت)
+    // ملاحظة: لكي تظهر صورك الخاصة، يجب رفعها على موقع وتغيير الروابط أدناه
+    let galleryImages = [
+        "https://images.unsplash.com/photo-1532274402911-5a369e4c4bb5?auto=format&fit=crop&w=800&q=80", // يشبه القباب الزجاجية
+        "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=800&q=80", // يشبه الأكواخ الخشبية
+        "https://images.unsplash.com/photo-1580587771525-78b9dba3b91d?auto=format&fit=crop&w=800&q=80"  // يشبه المدخل الحجري
     ]
     
-    let galleryImages = [
-        "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80",
-        "https://images.unsplash.com/photo-1519681393784-d8e5b56524dd?w=800&q=80",
-        "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80"
-    ]
+    // رابط خرائط جوجل (بحث مباشر عن الاسم لضمان الدقة)
+    let googleMapsURL = URL(string: "https://www.google.com/maps/search/?api=1&query=Jisr+Al-Lawziyah+Taif")!
 
     var body: some View {
         NavigationView {
@@ -116,30 +136,41 @@ struct ContentView: View {
                 ScrollView {
                     VStack(spacing: 25) {
                         
-                        // السلايدر
+                        // 1. معرض الصور (السلايدر)
                         TabView {
                             ForEach(galleryImages, id: \.self) { imgURL in
                                 AsyncImage(url: URL(string: imgURL)) { phase in
-                                    if let image = phase.image { image.resizable().scaledToFill() }
-                                    else { Color.gray.opacity(0.3) }
+                                    if let image = phase.image {
+                                        image.resizable().scaledToFill()
+                                    } else if phase.error != nil {
+                                        Color.red // في حال خطأ التحميل
+                                    } else {
+                                        Color.gray.opacity(0.3) // جاري التحميل
+                                    }
                                 }
                             }
                         }
-                        .frame(height: 250)
+                        .frame(height: 280)
                         .tabViewStyle(PageTabViewStyle())
-                        .overlay(Text("جسر اللوزية").font(.largeTitle).bold().foregroundColor(.white).shadow(radius: 5).padding(), alignment: .bottomTrailing)
+                        .overlay(
+                            Text("جسر اللوزية")
+                                .font(.system(size: 35, weight: .heavy))
+                                .foregroundColor(.white)
+                                .shadow(radius: 10)
+                                .padding(),
+                            alignment: .bottomTrailing
+                        )
                         
-                        // البطاقات (الطقس + المسافة)
+                        // 2. البطاقات (الطقس والمسافة)
                         HStack(spacing: 15) {
                             StatusCard(icon: weatherManager.icon, title: "الطقس", value: weatherManager.temperature, color: .blue)
-                            // هنا تظهر المسافة تلقائياً
-                            StatusCard(icon: "location.fill", title: "المسافة منك", value: locationManager.distanceText, color: .red)
+                            StatusCard(icon: "location.fill", title: "المسافة", value: locationManager.distanceText, color: .red)
                         }
                         .padding(.horizontal)
                         
-                        // قسم الحجز
+                        // 3. نموذج الحجز
                         VStack(alignment: .leading, spacing: 15) {
-                            HStack { Image(systemName: "calendar.badge.plus"); Text("حجز جلسة / كوخ").font(.headline) }
+                            HStack { Image(systemName: "calendar.badge.plus").foregroundColor(.purple); Text("احجز جلستك الآن").font(.headline) }
                             
                             TextField("الاسم الكريم", text: $guestName)
                                 .padding().background(Color.white).cornerRadius(10)
@@ -149,52 +180,65 @@ struct ContentView: View {
                                 .padding().background(Color.white).cornerRadius(10)
                             
                             DatePicker("وقت الوصول", selection: $bookingDate, displayedComponents: [.date, .hourAndMinute])
-                                .environment(\.locale, Locale(identifier: "ar_SA")) // تعريب التاريخ
+                                .environment(\.locale, Locale(identifier: "ar_SA"))
                                 .padding(5)
                             
                             Button(action: sendWhatsAppBooking) {
                                 HStack {
                                     Image(systemName: "paperplane.fill")
-                                    Text("إرسال طلب الحجز (واتساب)")
+                                    Text("تأكيد الحجز عبر واتساب")
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color.green)
+                                .background(Color.purple)
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
+                                .shadow(radius: 3)
                             }
                         }
                         .padding()
-                        .background(Color.white.opacity(0.6))
+                        .background(Color.white.opacity(0.8))
                         .cornerRadius(15)
                         .padding(.horizontal)
                         
-                        // الخريطة
+                        // 4. آراء الزوار
                         VStack(alignment: .leading) {
-                            Text("📍 موقعنا على الخريطة").font(.headline).padding(.horizontal)
-                            Map(coordinateRegion: $region, showsUserLocation: true, annotationItems: locations) { location in
-                                MapMarker(coordinate: location.coordinate, tint: .red)
-                            }
-                            .frame(height: 200)
-                            .cornerRadius(15)
-                            .padding(.horizontal)
-                        }
-                        
-                        // الآراء
-                        VStack(alignment: .leading) {
-                            Text("⭐️ آراء الزوار").font(.headline).padding(.horizontal)
+                            Text("💬 تجارب الزوار").font(.headline).padding(.horizontal)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 15) {
-                                    ForEach(reviews) { review in
-                                        ReviewCard(review: review)
-                                    }
+                                    ReviewCard(name: "خالد", comment: "المكان خيالي خصوصاً وقت الغروب 🌅", stars: 5)
+                                    ReviewCard(name: "نورة", comment: "الأكواخ نظيفة والخدمة ممتازة", stars: 5)
+                                    ReviewCard(name: "أحمد", comment: "القهوة لذيذة والجو بارد", stars: 4)
                                 }
                                 .padding(.horizontal)
                             }
                         }
                         
-                        // التواصل
-                        HStack {
+                        // 5. زر الموقع والخريطة
+                        VStack(spacing: 10) {
+                            Link(destination: googleMapsURL) {
+                                HStack {
+                                    Image(systemName: "map.fill")
+                                    Text("افتح الموقع في Google Maps")
+                                        .bold()
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(15)
+                            }
+                            
+                            Map(coordinateRegion: $region, showsUserLocation: true, annotationItems: locations) { location in
+                                MapMarker(coordinate: location.coordinate, tint: .purple)
+                            }
+                            .frame(height: 180)
+                            .cornerRadius(15)
+                        }
+                        .padding(.horizontal)
+                        
+                        // 6. التواصل
+                        HStack(spacing: 20) {
                             SocialLink(icon: "phone.circle.fill", color: .green, url: "https://wa.me/966549949745")
                             SocialLink(icon: "camera.circle.fill", color: .yellow, url: "https://www.snapchat.com/add/jsrlawzia")
                             SocialLink(icon: "play.circle.fill", color: .black, url: "https://www.tiktok.com/@jsrlawzia")
@@ -210,62 +254,44 @@ struct ContentView: View {
     
     func sendWhatsAppBooking() {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        formatter.dateFormat = "yyyy-MM-dd HH:mm a"
         formatter.locale = Locale(identifier: "ar_SA")
         let dateStr = formatter.string(from: bookingDate)
         
-        let message = """
-        مرحباً إدارة جسر اللوزية، أرغب بحجز:
-        👤 الاسم: \(guestName)
-        👥 العدد: \(guestCount)
-        📅 الوقت: \(dateStr)
-        """
+        let message = "مرحباً، أريد حجز:\nالاسم: \(guestName)\nالعدد: \(guestCount)\nالوقت: \(dateStr)"
+        let encoded = message.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         
-        let encodedMessage = message.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        let urlString = "https://wa.me/966549949745?text=\(encodedMessage)"
-        
-        if let url = URL(string: urlString) {
+        if let url = URL(string: "https://wa.me/966549949745?text=\(encoded)") {
             UIApplication.shared.open(url)
         }
     }
 }
 
-// --- المكونات ---
+// --- المكونات الفرعية ---
 struct StatusCard: View {
     let icon: String, title: String, value: String, color: Color
     var body: some View {
         VStack {
-            Image(systemName: icon).foregroundColor(color)
-            Text(value).font(.system(size: 16, weight: .bold)).lineLimit(1).minimumScaleFactor(0.5)
+            Image(systemName: icon).font(.title2).foregroundColor(color)
+            Text(value).font(.headline).bold().lineLimit(1).minimumScaleFactor(0.5)
             Text(title).font(.caption).foregroundColor(.gray)
         }
-        .frame(maxWidth: .infinity).padding().background(Color.white).cornerRadius(15)
+        .frame(maxWidth: .infinity).padding().background(Color.white).cornerRadius(15).shadow(radius: 1)
     }
 }
 
 struct ReviewCard: View {
-    let review: Review
+    let name: String, comment: String, stars: Int
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading) {
             HStack {
-                Text(review.name).bold().font(.caption)
+                Text(name).bold().font(.caption)
                 Spacer()
-                HStack(spacing: 2) {
-                    ForEach(0..<review.stars, id: \.self) { _ in
-                        Image(systemName: "star.fill").foregroundColor(.yellow).font(.caption2)
-                    }
-                }
+                HStack(spacing: 1) { ForEach(0..<stars, id: \.self) { _ in Image(systemName: "star.fill").foregroundColor(.yellow).font(.caption2) } }
             }
-            Text(review.comment)
-                .font(.caption2)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(comment).font(.caption2).foregroundColor(.gray).fixedSize(horizontal: false, vertical: true)
         }
-        .padding()
-        .frame(width: 200, height: 100)
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(radius: 2)
+        .padding().frame(width: 180, height: 90).background(Color.white).cornerRadius(12).shadow(radius: 1)
     }
 }
 
@@ -274,13 +300,7 @@ struct SocialLink: View {
     var body: some View {
         if let link = URL(string: url) {
             Link(destination: link) {
-                Image(systemName: icon)
-                    .resizable()
-                    .frame(width: 40, height: 40)
-                    .foregroundColor(color)
-                    .background(Color.white)
-                    .clipShape(Circle())
-                    .shadow(radius: 3)
+                Image(systemName: icon).resizable().frame(width: 45, height: 45).foregroundColor(color).background(Color.white).clipShape(Circle()).shadow(radius: 3)
             }
         }
     }
