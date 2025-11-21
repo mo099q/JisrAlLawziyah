@@ -25,8 +25,8 @@ class WeatherManager: ObservableObject {
     @Published var icon: String = "cloud.fill"
     
     func fetchWeather() {
-        // إحداثيات الشفا
-        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=21.0641&longitude=40.3603&current_weather=true"
+        // إحداثيات جسر اللوزية
+        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=21.0647&longitude=40.3612&current_weather=true"
         guard let url = URL(string: urlString) else { return }
         URLSession.shared.dataTask(with: url) { data, _, _ in
             guard let data = data, let decoded = try? JSONDecoder().decode(WeatherResponse.self, from: data) else { return }
@@ -43,9 +43,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     @Published var distanceText: String = "حساب المسافة..."
     
-    // 📍 هام جداً: هذه هي إحداثيات الموقع (قم بتغييرها إذا كان لديك أرقام أدق)
-    // حالياً مضبوطة على منطقة جسر اللوزية بالشفا
-    let targetCoordinate = CLLocationCoordinate2D(latitude: 21.0641, longitude: 40.3603)
+    // 📍 الإحداثيات الدقيقة المستخرجة من الكود 48C9+XJW
+    let targetCoordinate = CLLocationCoordinate2D(latitude: 21.0647, longitude: 40.3612)
     
     var targetLocation: CLLocation {
         CLLocation(latitude: targetCoordinate.latitude, longitude: targetCoordinate.longitude)
@@ -65,8 +64,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let distanceInKm = distanceInMeters / 1000
         
         DispatchQueue.main.async {
-            if distanceInKm < 0.5 {
-                self.distanceText = "أنت في الموقع 📍"
+            if distanceInKm < 0.3 {
+                self.distanceText = "وصلت للموقع 📍"
             } else {
                 self.distanceText = String(format: "يبعد %.1f كم", distanceInKm)
             }
@@ -79,7 +78,7 @@ struct JisrApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .preferredColorScheme(.dark) // الوضع الليلي دائماً
+                .preferredColorScheme(.dark) // الوضع الليلي
         }
     }
 }
@@ -91,26 +90,26 @@ struct ContentView: View {
     
     // إحداثيات الخريطة الداخلية
     @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 21.0641, longitude: 40.3603),
-        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        center: CLLocationCoordinate2D(latitude: 21.0647, longitude: 40.3612),
+        span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
     )
     
-    let locations = [LocationPoint(name: "جسر اللوزية", coordinate: CLLocationCoordinate2D(latitude: 21.0641, longitude: 40.3603))]
+    let locations = [LocationPoint(name: "جسر اللوزية", coordinate: CLLocationCoordinate2D(latitude: 21.0647, longitude: 40.3612))]
     
     // متغيرات الحجز
     @State private var guestName = ""
     @State private var guestCount = ""
     @State private var bookingDate = Date()
     
-    // روابط الصور (من الألبوم السابق)
+    // صور المعرض
     let galleryImages = [
         "https://i.imgur.com/8d9wXgD.jpeg",
         "https://i.imgur.com/Pj5s4Zc.jpeg",
         "https://i.imgur.com/Lq8y6kE.jpeg"
     ]
     
-    // رابط الموقع في جوجل ماب (للتوجيه)
-    let googleMapsLink = URL(string: "https://www.google.com/maps/search/?api=1&query=21.0641,40.3603")!
+    // رابط التوجيه المباشر
+    let googleMapsLink = URL(string: "https://www.google.com/maps/search/?api=1&query=21.0647,40.3612")!
 
     var body: some View {
         NavigationView {
@@ -149,20 +148,20 @@ struct ContentView: View {
                         }
                         .padding(.horizontal)
                         
-                        // --- 3. زر التوجيه (جديد) ---
+                        // --- 3. زر التوجيه (قوقل ماب) ---
                         Link(destination: googleMapsLink) {
                             HStack {
-                                Image(systemName: "car.fill")
+                                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
                                     .font(.title2)
                                 Text("اتجه للموقع الآن (Google Maps)")
                                     .fontWeight(.bold)
                             }
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.blue)
+                            .background(LinearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
                             .foregroundColor(.white)
                             .cornerRadius(15)
-                            .shadow(color: .blue.opacity(0.5), radius: 10, x: 0, y: 5)
+                            .shadow(color: .blue.opacity(0.4), radius: 8, x: 0, y: 4)
                         }
                         .padding(.horizontal)
                         
@@ -177,7 +176,11 @@ struct ContentView: View {
                                 .keyboardType(.numberPad)
                                 .padding().background(Color.white).foregroundColor(.black).cornerRadius(12)
                             
-                            DatePicker("الوقت", selection: $bookingDate).colorScheme(.dark)
+                            HStack {
+                                Text("الوقت").foregroundColor(.gray)
+                                Spacer()
+                                DatePicker("", selection: $bookingDate).labelsHidden().colorScheme(.dark)
+                            }
                             
                             Button(action: sendBooking) {
                                 Text("إرسال الحجز (واتساب)")
@@ -203,20 +206,29 @@ struct ContentView: View {
                         .overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.white.opacity(0.2)))
                         .padding(.horizontal)
                         
-                        // --- 6. التواصل (الأيقونات الحقيقية) ---
+                        // --- 6. التواصل (الصور الصحيحة) ---
                         Text("تواصل معنا")
                             .font(.headline)
                             .foregroundColor(.gray)
                         
-                        HStack(spacing: 25) {
-                            // واتساب
-                            SocialLogo(imageURL: "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg", url: "https://wa.me/966549949745")
+                        HStack(spacing: 30) {
+                            // واتساب (صورة رسمية)
+                            SocialLogo(
+                                imageURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/1024px-WhatsApp.svg.png",
+                                url: "https://wa.me/966549949745"
+                            )
                             
-                            // سناب شات
-                            SocialLogo(imageURL: "https://upload.wikimedia.org/wikipedia/en/c/c4/Snapchat_logo.svg", url: "https://www.snapchat.com/add/jsrlawzia")
+                            // سناب شات (صورة رسمية)
+                            SocialLogo(
+                                imageURL: "https://upload.wikimedia.org/wikipedia/en/thumb/c/c4/Snapchat_logo.svg/1024px-Snapchat_logo.svg.png",
+                                url: "https://www.snapchat.com/add/jsrlawzia"
+                            )
                             
-                            // تيك توك
-                            SocialLogo(imageURL: "https://upload.wikimedia.org/wikipedia/en/a/a9/TikTok_logo.svg", url: "https://www.tiktok.com/@jsrlawzia")
+                            // تيك توك (صورة رسمية)
+                            SocialLogo(
+                                imageURL: "https://upload.wikimedia.org/wikipedia/en/thumb/a/a9/TikTok_logo.svg/1024px-TikTok_logo.svg.png",
+                                url: "https://www.tiktok.com/@jsrlawzia"
+                            )
                         }
                         .padding(.bottom, 50)
                     }
@@ -240,7 +252,6 @@ struct ContentView: View {
 
 // --- مكونات التصميم ---
 
-// زر الشعار (يحمل الصورة من النت)
 struct SocialLogo: View {
     let imageURL: String
     let url: String
@@ -252,13 +263,15 @@ struct SocialLogo: View {
                     if let image = phase.image {
                         image.resizable()
                              .scaledToFit()
-                             .frame(width: 50, height: 50) // حجم الأيقونة
-                             .background(Color.white) // خلفية بيضاء للشعار ليكون واضحاً
-                             .clipShape(Circle())     // قص دائري
-                             .shadow(radius: 5)
+                             .frame(width: 55, height: 55)
+                             // خلفية بيضاء خفيفة لبروز الشعار إذا لزم الأمر
+                             .background(Color.white)
+                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                             .shadow(color: .white.opacity(0.2), radius: 5)
                     } else {
-                        // شكل مؤقت أثناء التحميل
-                        Circle().fill(Color.gray.opacity(0.5)).frame(width: 50, height: 50)
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 55, height: 55)
                     }
                 }
             }
