@@ -12,11 +12,11 @@ struct LocationPoint: Identifiable {
     let coordinate: CLLocationCoordinate2D
 }
 
-struct Review: Identifiable {
+struct GamePackage: Identifiable {
     let id = UUID()
-    let name: String
-    let comment: String
-    let stars: Int
+    let pay: String
+    let get: String
+    let color: Color
 }
 
 // --- 1. مدير الطقس ---
@@ -25,8 +25,8 @@ class WeatherManager: ObservableObject {
     @Published var icon: String = "cloud.fill"
     
     func fetchWeather() {
-        // إحداثيات جسر اللوزية
-        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=21.0647&longitude=40.3612&current_weather=true"
+        // الإحداثيات الجديدة الصحيحة
+        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=21.1224&longitude=40.3190&current_weather=true"
         guard let url = URL(string: urlString) else { return }
         URLSession.shared.dataTask(with: url) { data, _, _ in
             guard let data = data, let decoded = try? JSONDecoder().decode(WeatherResponse.self, from: data) else { return }
@@ -43,8 +43,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     @Published var distanceText: String = "حساب المسافة..."
     
-    // 📍 الإحداثيات الدقيقة المستخرجة من الكود 48C9+XJW
-    let targetCoordinate = CLLocationCoordinate2D(latitude: 21.0647, longitude: 40.3612)
+    // 📍 الإحداثيات الجديدة (21.1224671, 40.3190809)
+    let targetCoordinate = CLLocationCoordinate2D(latitude: 21.1224671, longitude: 40.3190809)
     
     var targetLocation: CLLocation {
         CLLocation(latitude: targetCoordinate.latitude, longitude: targetCoordinate.longitude)
@@ -64,8 +64,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let distanceInKm = distanceInMeters / 1000
         
         DispatchQueue.main.async {
-            if distanceInKm < 0.3 {
-                self.distanceText = "وصلت للموقع 📍"
+            if distanceInKm < 0.5 {
+                self.distanceText = "أنت في المنتجع 📍"
             } else {
                 self.distanceText = String(format: "يبعد %.1f كم", distanceInKm)
             }
@@ -78,7 +78,7 @@ struct JisrApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .preferredColorScheme(.dark) // الوضع الليلي
+                .preferredColorScheme(.dark)
         }
     }
 }
@@ -88,18 +88,22 @@ struct ContentView: View {
     @StateObject var weatherManager = WeatherManager()
     @StateObject var locationManager = LocationManager()
     
-    // إحداثيات الخريطة الداخلية
+    // إعدادات الخريطة (محدثة)
     @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 21.0647, longitude: 40.3612),
+        center: CLLocationCoordinate2D(latitude: 21.1224671, longitude: 40.3190809),
         span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
     )
     
-    let locations = [LocationPoint(name: "جسر اللوزية", coordinate: CLLocationCoordinate2D(latitude: 21.0647, longitude: 40.3612))]
+    let locations = [LocationPoint(name: "منتجع جسر اللوزية", coordinate: CLLocationCoordinate2D(latitude: 21.1224671, longitude: 40.3190809))]
     
-    // متغيرات الحجز
-    @State private var guestName = ""
-    @State private var guestCount = ""
-    @State private var bookingDate = Date()
+    // بكجات الألعاب (المعلومات التي حفظناها)
+    let packages = [
+        GamePackage(pay: "100", get: "110", color: .purple),
+        GamePackage(pay: "200", get: "230", color: .blue),
+        GamePackage(pay: "300", get: "350", color: .orange),
+        GamePackage(pay: "500", get: "600", color: .green),
+        GamePackage(pay: "750", get: "1000", color: .red) // العرض الأقوى
+    ]
     
     // صور المعرض
     let galleryImages = [
@@ -108,8 +112,8 @@ struct ContentView: View {
         "https://i.imgur.com/Lq8y6kE.jpeg"
     ]
     
-    // رابط التوجيه المباشر
-    let googleMapsLink = URL(string: "https://www.google.com/maps/search/?api=1&query=21.0647,40.3612")!
+    // رابط جوجل ماب للإحداثيات الجديدة
+    let googleMapsLink = URL(string: "https://www.google.com/maps/search/?api=1&query=21.1224671,40.3190809")!
 
     var body: some View {
         NavigationView {
@@ -119,7 +123,7 @@ struct ContentView: View {
                 ScrollView {
                     VStack(spacing: 25) {
                         
-                        // --- 1. السلايدر ---
+                        // --- 1. الهيدر والسلايدر ---
                         TabView {
                             ForEach(galleryImages, id: \.self) { imgURL in
                                 AsyncImage(url: URL(string: imgURL)) { phase in
@@ -130,105 +134,120 @@ struct ContentView: View {
                         }
                         .frame(height: 280)
                         .tabViewStyle(PageTabViewStyle())
+                        .overlay(LinearGradient(colors: [.clear, .black], startPoint: .center, endPoint: .bottom))
                         .overlay(
-                            LinearGradient(colors: [.clear, .black], startPoint: .center, endPoint: .bottom)
-                        )
-                        .overlay(
-                            Text("جسر اللوزية")
-                                .font(.system(size: 35, weight: .heavy, design: .rounded))
-                                .foregroundColor(.white)
-                                .padding(),
-                            alignment: .bottomTrailing
+                            VStack(alignment: .leading) {
+                                Text("منتجع جسر اللوزية")
+                                    .font(.system(size: 32, weight: .heavy))
+                                    .foregroundColor(.white)
+                                Text("مطاعم • كافيهات • ألعاب • إطلالة")
+                                    .font(.subheadline)
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                            .padding(),
+                            alignment: .bottomLeading
                         )
                         
-                        // --- 2. المعلومات ---
+                        // --- 2. حالة الطقس والمسافة ---
                         HStack(spacing: 15) {
                             StatusBox(icon: weatherManager.icon, title: "الطقس", value: weatherManager.temperature, color: .blue)
                             StatusBox(icon: "location.fill", title: "المسافة", value: locationManager.distanceText, color: .red)
                         }
                         .padding(.horizontal)
                         
-                        // --- 3. زر التوجيه (قوقل ماب) ---
-                        Link(destination: googleMapsLink) {
+                        // --- 3. أسعار الدخول (جديد) ---
+                        VStack(spacing: 10) {
                             HStack {
-                                Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
-                                    .font(.title2)
-                                Text("اتجه للموقع الآن (Google Maps)")
-                                    .fontWeight(.bold)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(LinearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .leading, endPoint: .trailing))
-                            .foregroundColor(.white)
-                            .cornerRadius(15)
-                            .shadow(color: .blue.opacity(0.4), radius: 8, x: 0, y: 4)
-                        }
-                        .padding(.horizontal)
-                        
-                        // --- 4. الحجز ---
-                        VStack(alignment: .leading, spacing: 15) {
-                            Text("احجز جلستك").font(.headline).foregroundColor(.white)
-                            
-                            TextField("الاسم", text: $guestName)
-                                .padding().background(Color.white).foregroundColor(.black).cornerRadius(12)
-                            
-                            TextField("العدد", text: $guestCount)
-                                .keyboardType(.numberPad)
-                                .padding().background(Color.white).foregroundColor(.black).cornerRadius(12)
-                            
-                            HStack {
-                                Text("الوقت").foregroundColor(.gray)
+                                Image(systemName: "ticket.fill").foregroundColor(.yellow)
+                                Text("تذاكر الدخول").font(.headline).foregroundColor(.white)
                                 Spacer()
-                                DatePicker("", selection: $bookingDate).labelsHidden().colorScheme(.dark)
                             }
                             
-                            Button(action: sendBooking) {
-                                Text("إرسال الحجز (واتساب)")
-                                    .bold()
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.green)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
+                            HStack {
+                                Text("سعر التذكرة للفرد")
+                                Spacer()
+                                Text("15 ريال").bold().foregroundColor(.yellow)
+                            }
+                            Divider().background(Color.gray)
+                            HStack {
+                                Text("الدخول المجاني")
+                                Spacer()
+                                Text("أطفال < سنتين + ذوي الهمم").font(.caption).foregroundColor(.green)
                             }
                         }
                         .padding()
                         .background(Color(UIColor.systemGray6).opacity(0.2))
-                        .cornerRadius(20)
-                        .padding(.horizontal)
-                        
-                        // --- 5. الخريطة الداخلية ---
-                        Map(coordinateRegion: $region, showsUserLocation: true, annotationItems: locations) { loc in
-                            MapMarker(coordinate: loc.coordinate, tint: .red)
-                        }
-                        .frame(height: 200)
                         .cornerRadius(15)
-                        .overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.white.opacity(0.2)))
                         .padding(.horizontal)
                         
-                        // --- 6. التواصل (الصور الصحيحة) ---
-                        Text("تواصل معنا")
-                            .font(.headline)
-                            .foregroundColor(.gray)
+                        // --- 4. بكجات الألعاب (جديد) ---
+                        VStack(alignment: .leading) {
+                            Text("🎉 عروض شحن الرصيد (الألعاب)").font(.headline).foregroundColor(.white).padding(.horizontal)
+                            
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 15) {
+                                    ForEach(packages) { pkg in
+                                        VStack {
+                                            Text("ادفع").font(.caption2).foregroundColor(.white.opacity(0.7))
+                                            Text(pkg.pay).font(.title).bold().foregroundColor(.white)
+                                            Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.3))
+                                            Text("تحصل على").font(.caption2).foregroundColor(.white.opacity(0.7))
+                                            Text(pkg.get).font(.title2).bold().foregroundColor(.white)
+                                        }
+                                        .frame(width: 100, height: 120)
+                                        .background(pkg.color.opacity(0.8))
+                                        .cornerRadius(15)
+                                        .shadow(radius: 5)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
                         
+                        // --- 5. مرافق المنتجع ---
+                        VStack(alignment: .leading, spacing: 15) {
+                            Text("🏰 مرافق المنتجع").font(.headline).foregroundColor(.white).padding(.horizontal)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 15) {
+                                    FacilityCard(icon: "fork.knife", title: "مطاعم متنوعة")
+                                    FacilityCard(icon: "cup.and.saucer.fill", title: "كافيهات")
+                                    FacilityCard(icon: "gamecontroller.fill", title: "صالة ألعاب")
+                                    FacilityCard(icon: "camera.macro", title: "الجسر المطل")
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                        
+                        // --- 6. التوجيه والخريطة ---
+                        VStack(spacing: 15) {
+                            Link(destination: googleMapsLink) {
+                                HStack {
+                                    Image(systemName: "paperplane.fill")
+                                    Text("اتجه للموقع (خرائط جوجل)")
+                                        .fontWeight(.bold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(15)
+                            }
+                            
+                            Map(coordinateRegion: $region, showsUserLocation: true, annotationItems: locations) { loc in
+                                MapMarker(coordinate: loc.coordinate, tint: .red)
+                            }
+                            .frame(height: 200)
+                            .cornerRadius(15)
+                            .overlay(RoundedRectangle(cornerRadius: 15).stroke(Color.white.opacity(0.2)))
+                        }
+                        .padding(.horizontal)
+                        
+                        // --- 7. التواصل ---
+                        Text("تواصل معنا").font(.headline).foregroundColor(.gray)
                         HStack(spacing: 30) {
-                            // واتساب (صورة رسمية)
-                            SocialLogo(
-                                imageURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/1024px-WhatsApp.svg.png",
-                                url: "https://wa.me/966549949745"
-                            )
-                            
-                            // سناب شات (صورة رسمية)
-                            SocialLogo(
-                                imageURL: "https://upload.wikimedia.org/wikipedia/en/thumb/c/c4/Snapchat_logo.svg/1024px-Snapchat_logo.svg.png",
-                                url: "https://www.snapchat.com/add/jsrlawzia"
-                            )
-                            
-                            // تيك توك (صورة رسمية)
-                            SocialLogo(
-                                imageURL: "https://upload.wikimedia.org/wikipedia/en/thumb/a/a9/TikTok_logo.svg/1024px-TikTok_logo.svg.png",
-                                url: "https://www.tiktok.com/@jsrlawzia"
-                            )
+                            SocialLogo(imageURL: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/WhatsApp.svg/1024px-WhatsApp.svg.png", url: "https://wa.me/966549949745")
+                            SocialLogo(imageURL: "https://upload.wikimedia.org/wikipedia/en/thumb/c/c4/Snapchat_logo.svg/1024px-Snapchat_logo.svg.png", url: "https://www.snapchat.com/add/jsrlawzia")
+                            SocialLogo(imageURL: "https://upload.wikimedia.org/wikipedia/en/thumb/a/a9/TikTok_logo.svg/1024px-TikTok_logo.svg.png", url: "https://www.tiktok.com/@jsrlawzia")
                         }
                         .padding(.bottom, 50)
                     }
@@ -238,40 +257,34 @@ struct ContentView: View {
             .navigationBarHidden(true)
         }
     }
-    
-    func sendBooking() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        let msg = "مرحباً، حجز جديد:\nالاسم: \(guestName)\nالعدد: \(guestCount)\nالوقت: \(formatter.string(from: bookingDate))"
-        let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        if let url = URL(string: "https://wa.me/966549949745?text=\(encoded)") {
-            UIApplication.shared.open(url)
-        }
-    }
 }
 
 // --- مكونات التصميم ---
 
+struct FacilityCard: View {
+    let icon: String, title: String
+    var body: some View {
+        VStack {
+            Image(systemName: icon).font(.largeTitle).foregroundColor(.white)
+            Text(title).font(.caption).bold().foregroundColor(.white)
+        }
+        .frame(width: 100, height: 90)
+        .background(Color(UIColor.systemGray6).opacity(0.3))
+        .cornerRadius(15)
+    }
+}
+
 struct SocialLogo: View {
-    let imageURL: String
-    let url: String
-    
+    let imageURL: String, url: String
     var body: some View {
         if let link = URL(string: url) {
             Link(destination: link) {
                 AsyncImage(url: URL(string: imageURL)) { phase in
                     if let image = phase.image {
-                        image.resizable()
-                             .scaledToFit()
-                             .frame(width: 55, height: 55)
-                             // خلفية بيضاء خفيفة لبروز الشعار إذا لزم الأمر
-                             .background(Color.white)
-                             .clipShape(RoundedRectangle(cornerRadius: 12))
-                             .shadow(color: .white.opacity(0.2), radius: 5)
+                        image.resizable().scaledToFit().frame(width: 55, height: 55)
+                             .background(Color.white).clipShape(RoundedRectangle(cornerRadius: 12))
                     } else {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 55, height: 55)
+                        RoundedRectangle(cornerRadius: 12).fill(Color.gray.opacity(0.3)).frame(width: 55, height: 55)
                     }
                 }
             }
