@@ -1,23 +1,20 @@
 import SwiftUI
 import Foundation
 
-// --- نموذج بيانات الطقس (لجلب البيانات من الإنترنت) ---
+// --- مدير الطقس ---
 struct WeatherResponse: Codable {
     let current_weather: CurrentWeather
 }
 struct CurrentWeather: Codable {
     let temperature: Double
-    let windspeed: Double
     let weathercode: Int
 }
 
-// --- الكلاس المسؤول عن جلب الطقس ---
 class WeatherManager: ObservableObject {
     @Published var temperature: String = "--"
     @Published var icon: String = "cloud"
     
     func fetchWeather() {
-        // إحداثيات الشفا، الطائف
         let urlString = "https://api.open-meteo.com/v1/forecast?latitude=21.06&longitude=40.36&current_weather=true"
         guard let url = URL(string: urlString) else { return }
         
@@ -26,7 +23,6 @@ class WeatherManager: ObservableObject {
             if let decoded = try? JSONDecoder().decode(WeatherResponse.self, from: data) {
                 DispatchQueue.main.async {
                     self.temperature = "\(Int(decoded.current_weather.temperature))°C"
-                    // تحديد الأيقونة بناءً على الكود ببساطة
                     self.icon = decoded.current_weather.temperature > 25 ? "sun.max.fill" : "cloud.fog.fill"
                 }
             }
@@ -34,7 +30,7 @@ class WeatherManager: ObservableObject {
     }
 }
 
-// --- نقطة انطلاق التطبيق ---
+// --- نقطة الانطلاق ---
 @main
 struct JisrApp: App {
     var body: some Scene {
@@ -44,81 +40,84 @@ struct JisrApp: App {
     }
 }
 
-// --- واجهة المستخدم الرئيسية ---
+// --- الواجهة الرئيسية ---
 struct ContentView: View {
     @StateObject var weatherManager = WeatherManager()
     
-    // رابط الموقع الصحيح (بحث مباشر في الخرائط)
-    let mapsURL = URL(string: "https://www.google.com/maps/search/?api=1&query=Jisr+Al-Lawziyah+Taif")!
+    // الروابط الجديدة
+    let locationURL = URL(string: "https://tr.ee/eE3_QytVnQ")!
+    let whatsappURL = URL(string: "https://wa.me/966549949745")!
+    let snapchatURL = URL(string: "https://www.snapchat.com/add/jsrlawzia?share_id=ul-_YNESh_4&locale=en-EG")!
+    let tiktokURL = URL(string: "https://www.tiktok.com/@jsrlawzia")!
     
     var body: some View {
         NavigationView {
             ZStack {
-                // خلفية متدرجة توحي بالطبيعة والضباب
                 LinearGradient(gradient: Gradient(colors: [Color("SkyBlue"), Color.white]), startPoint: .top, endPoint: .bottom)
                     .edgesIgnoringSafeArea(.all)
                 
                 ScrollView {
                     VStack(spacing: 20) {
                         
-                        // 1. صورة الهيدر
-                        Image(systemName: "mountain.2.fill") // صورة تعبيرية حتى يتم وضع صور حقيقية
+                        // صورة تعبيرية
+                        Image(systemName: "mountain.2.circle.fill")
                             .resizable()
                             .scaledToFit()
-                            .frame(height: 180)
-                            .foregroundColor(.gray)
-                            .padding(.top)
+                            .frame(height: 120)
+                            .foregroundColor(.blue.opacity(0.8))
+                            .padding(.top, 40)
+                            .shadow(radius: 10)
                         
                         Text("جسر اللوزية")
-                            .font(.system(size: 35, weight: .heavy))
-                            .foregroundColor(.primary)
+                            .font(.system(size: 32, weight: .heavy))
                         
-                        // 2. بطاقة الطقس (ميزة جديدة)
+                        // بطاقة الطقس
                         HStack {
                             VStack(alignment: .leading) {
-                                Text("طقس الشفا الآن")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                Text("الطقس الآن")
+                                    .font(.caption).foregroundColor(.secondary)
                                 Text(weatherManager.temperature)
-                                    .font(.system(size: 30, weight: .bold))
+                                    .font(.system(size: 28, weight: .bold))
                                     .foregroundColor(.blue)
                             }
                             Spacer()
                             Image(systemName: weatherManager.icon)
-                                .resizable()
-                                .frame(width: 40, height: 40)
-                                .foregroundColor(.orange)
+                                .resizable().frame(width: 40, height: 40).foregroundColor(.orange)
                         }
-                        .padding()
-                        .background(Color.white.opacity(0.9))
-                        .cornerRadius(15)
-                        .padding(.horizontal)
-                        .shadow(radius: 3)
+                        .padding().background(Color.white).cornerRadius(15).padding(.horizontal).shadow(radius: 2)
                         
-                        // 3. بطاقة المعلومات (السعر والاوقات)
+                        // معلومات العمل
                         VStack(alignment: .leading, spacing: 15) {
-                            InfoRow(icon: "ticket.fill", title: "سعر الدخول", value: "مجاني (بدون تذكرة)")
-                            
+                            InfoRow(icon: "ticket.fill", title: "الدخول", value: "مجاني")
                             Divider()
-                            
-                            Text("أوقات العمل")
-                                .font(.headline)
-                                .padding(.top, 5)
-                            
+                            Text("أوقات العمل").font(.headline)
                             TimeRow(day: "الأحد - الأربعاء", time: "3:30 م - 12:00 ص")
                             TimeRow(day: "الخميس - الجمعة", time: "3:30 م - 1:00 ص")
                         }
-                        .padding()
-                        .background(Color.white)
-                        .cornerRadius(15)
-                        .padding(.horizontal)
-                        .shadow(radius: 3)
+                        .padding().background(Color.white).cornerRadius(15).padding(.horizontal).shadow(radius: 2)
                         
-                        // 4. زر الموقع
-                        Link(destination: mapsURL) {
+                        // --- قسم التواصل (الجديد) ---
+                        VStack(spacing: 15) {
+                            Text("تواصل معنا")
+                                .font(.headline)
+                                .foregroundColor(.gray)
+                            
+                            HStack(spacing: 15) {
+                                // زر واتساب
+                                SocialButton(url: whatsappURL, icon: "phone.circle.fill", color: .green, text: "WhatsApp")
+                                // زر سناب
+                                SocialButton(url: snapchatURL, icon: "camera.circle.fill", color: .yellow, text: "Snapchat")
+                            }
+                            // زر تيك توك
+                            SocialButton(url: tiktokURL, icon: "play.circle.fill", color: .black, text: "TikTok")
+                        }
+                        .padding()
+                        
+                        // زر الموقع
+                        Link(destination: locationURL) {
                             HStack {
                                 Image(systemName: "map.fill")
-                                Text("افتـح المـوقـع في Google Maps")
+                                Text("مـوقـع الجسـر (الخريطة)")
                                     .fontWeight(.bold)
                             }
                             .frame(maxWidth: .infinity)
@@ -128,31 +127,47 @@ struct ContentView: View {
                             .cornerRadius(15)
                         }
                         .padding(.horizontal)
-                        .padding(.top, 10)
-
-                        Spacer()
-                        Text("تحديث البيانات تلقائي - LEX-Q")
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                            .padding(.bottom)
+                        .padding(.bottom, 30)
                     }
                 }
             }
-            .onAppear {
-                weatherManager.fetchWeather()
-            }
+            .onAppear { weatherManager.fetchWeather() }
             .navigationBarHidden(true)
         }
-        // تعريف لون مخصص (اختياري لكي لا يحدث خطأ)
     }
 }
 
-// --- مكونات التصميم الفرعية ---
+// --- تصميم الأزرار ---
+struct SocialButton: View {
+    let url: URL
+    let icon: String
+    let color: Color
+    let text: String
+    
+    var body: some View {
+        Link(destination: url) {
+            HStack {
+                Image(systemName: icon)
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                Text(text)
+                    .fontWeight(.semibold)
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(color)
+            .foregroundColor(color == .yellow ? .black : .white) // لون النص أسود للسناب
+            .cornerRadius(10)
+            .shadow(radius: 2)
+        }
+    }
+}
+
 struct InfoRow: View {
     let icon: String, title: String, value: String
     var body: some View {
         HStack {
-            Image(systemName: icon).foregroundColor(.green).frame(width: 25)
+            Image(systemName: icon).foregroundColor(.green)
             Text(title).foregroundColor(.secondary)
             Spacer()
             Text(value).fontWeight(.bold)
