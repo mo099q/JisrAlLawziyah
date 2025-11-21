@@ -1,4 +1,4 @@
-name: Build iOS IPA
+name: Build TrollStore IPA
 
 on:
   push:
@@ -7,11 +7,11 @@ on:
 
 jobs:
   build:
-    name: Build App
+    name: Build Ad-Hoc IPA
     runs-on: macos-latest
     
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v3
 
       - name: Install XcodeGen
@@ -20,26 +20,30 @@ jobs:
       - name: Generate Project
         run: xcodegen generate
 
-      - name: Build Archive
+      - name: Build & Ad-Hoc Sign
         run: |
+          # هنا التغيير المهم: نستخدم التوقيع الوهمي (-) بدلاً من إلغاء التوقيع
           xcodebuild -project JisrAlLawziyah.xcodeproj \
             -scheme JisrAlLawziyah \
             -sdk iphoneos \
             -configuration Release \
             -archivePath JisrAlLawziyah.xcarchive \
             archive \
-            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
 
-      - name: Export IPA
+      - name: Export and Package IPA
         run: |
           mkdir Payload
+          # نقل التطبيق للمجلد
           mv JisrAlLawziyah.xcarchive/Products/Applications/JisrAlLawziyah.app Payload/
+          
+          # ضغط الملف بصيغة IPA
           zip -r JisrAlLawziyah.ipa Payload
 
-      - name: Upload IPA
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JisrAlLawziyah-IPA
+          name: JisrAlLawziyah-TrollStore
           path: JisrAlLawziyah.ipa
