@@ -3,23 +3,77 @@ import MapKit
 import CoreLocation
 
 // ==========================================
-// MARK: - 1. DATA MODELS
+// MARK: - 1. نماذج البيانات
 // ==========================================
 
-struct MenuItem: Identifiable {
-    let id = UUID(); let name: String; let price: Double; let image: String
-}
-
-struct SessionStatus: Identifiable {
-    let id = UUID(); let name: String; let status: String; let color: Color
-}
+struct WeatherResponse: Codable { let current_weather: CurrentWeather }
+struct CurrentWeather: Codable { let temperature: Double; let weathercode: Int }
 
 struct LocationPoint: Identifiable {
     let id = UUID(); let name: String; let coordinate: CLLocationCoordinate2D
 }
 
+struct GamePackage: Identifiable {
+    let id = UUID(); let pay: Double; let get: Double; let color: Color
+}
+
+struct SessionType: Identifiable {
+    let id = UUID(); let name: String; let price: Double; let features: String; let imageURL: String
+}
+
+struct ServiceItem: Identifiable {
+    let id = UUID(); let name: String; let icon: String
+}
+
 // ==========================================
-// MARK: - 2. MAIN APP SETUP
+// MARK: - 2. المدراء (الطقس والموقع)
+// ==========================================
+
+class WeatherManager: ObservableObject {
+    @Published var temperature: String = "--"
+    @Published var condition: String = "جاري التحميل"
+    @Published var icon: String = "moon.stars.fill"
+    
+    func fetchWeather() {
+        // إحداثيات المنتجع (21.1224, 40.3190)
+        let urlString = "https://api.open-meteo.com/v1/forecast?latitude=21.1224&longitude=40.3190&current_weather=true"
+        guard let url = URL(string: urlString) else { return }
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data = data, let decoded = try? JSONDecoder().decode(WeatherResponse.self, from: data) else { return }
+            DispatchQueue.main.async {
+                self.temperature = "\(Int(decoded.current_weather.temperature))°"
+                let code = decoded.current_weather.weathercode
+                if code > 50 { self.condition = "ممطر/ضباب"; self.icon = "cloud.fog.fill" }
+                else if decoded.current_weather.temperature < 15 { self.condition = "بارد جداً"; self.icon = "thermometer.snowflake" }
+                else { self.condition = "أجواء صافية"; self.icon = "moon.stars.fill" }
+            }
+        }.resume()
+    }
+}
+
+class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    @Published var distanceText: String = "..."
+    let targetCoordinate = CLLocationCoordinate2D(latitude: 21.1224671, longitude: 40.3190809)
+    var targetLocation: CLLocation { CLLocation(latitude: targetCoordinate.latitude, longitude: targetCoordinate.longitude) }
+    
+    override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        manager.requestWhenInUseAuthorization()
+        manager.startUpdatingLocation()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        let dist = location.distance(from: targetLocation) / 1000
+        DispatchQueue.main.async { self.distanceText = dist < 0.5 ? "وصلت للموقع" : String(format: "%.1f كم", dist) }
+    }
+}
+
+// ==========================================
+// MARK: - 3. التطبيق الرئيسي
 // ==========================================
 @main
 struct JisrApp: App {
@@ -31,11 +85,10 @@ struct JisrApp: App {
 }
 
 // ==========================================
-// MARK: - 3. TAB BAR NAVIGATION
+// MARK: - 4. التبويبات
 // ==========================================
 struct MainTabView: View {
     init() {
-        // جعل البار السفلي أسود تماماً مثل Six Flags
         UITabBar.appearance().backgroundColor = UIColor.black
         UITabBar.appearance().barTintColor = UIColor.black
     }
@@ -43,239 +96,236 @@ struct MainTabView: View {
     var body: some View {
         TabView {
             HomeView()
-                .tabItem { Label("الرئيسية", systemImage: "flag.fill") }
+                .tabItem { Label("الرئيسية", systemImage: "house.fill") }
             
-            TicketPassView() // ميزة جديدة (تذكرتي)
-                .tabItem { Label("تذكرتي", systemImage: "qrcode") }
+            BookingListView()
+                .tabItem { Label("الحجوزات", systemImage: "calendar") }
             
-            FoodOrderView() // ميزة جديدة (الطلب المسبق)
-                .tabItem { Label("الطلبات", systemImage: "cup.and.saucer.fill") }
+            ServicesView()
+                .tabItem { Label("الخدمات", systemImage: "bell.fill") }
             
-            ResortMapView()
-                .tabItem { Label("الخريطة", systemImage: "map.fill") }
+            BudgetView()
+                .tabItem { Label("الميزانية", systemImage: "banknote") }
         }
-        .accentColor(.yellow) // اللون الأصفر المميز للمنتجعات
+        .accentColor(.yellow)
     }
 }
 
 // ==========================================
-// MARK: - 4. SCREENS (الشاشات)
+// MARK: - 5. الشاشات
 // ==========================================
 
-// --- 1. الرئيسية (Home & Status) ---
+// --- 1. الصفحة الرئيسية (المحدثة) ---
 struct HomeView: View {
-    // حالة الجلسات (محاكاة لنظام Wait Times في Six Flags)
-    let statuses = [
-        SessionStatus(name: "البلورات", status: "متاح ✅", color: .green),
-        SessionStatus(name: "الأكواخ", status: "مزدحم ⚠️", color: .orange),
-        SessionStatus(name: "بيوت الشعر", status: "ممتلئ 🔴", color: .red)
-    ]
+    @StateObject var weatherManager = WeatherManager()
+    @StateObject var locationManager = LocationManager()
     
-    let headerImage = "https://images.unsplash.com/photo-1571003123894-1f0594d2b5d9?w=800&q=80" // صورة ليلية للمنتجع
+    let mainImage = "https://images.unsplash.com/photo-1600607686527-6fb886090705?w=800&q=80"
+    let googleMapsLink = URL(string: "https://www.google.com/maps/search/?api=1&query=21.1224671,40.3190809")!
+    
+    // بكجات الألعاب
+    let packages = [
+        GamePackage(pay: 100, get: 110, color: .purple),
+        GamePackage(pay: 200, get: 230, color: .blue),
+        GamePackage(pay: 300, get: 350, color: .orange),
+        GamePackage(pay: 500, get: 600, color: .green),
+        GamePackage(pay: 750, get: 1000, color: .red)
+    ]
 
     var body: some View {
         NavigationView {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    
-                    // صورة الهيدر الكبيرة
-                    ZStack(alignment: .bottomLeading) {
-                        AsyncImage(url: URL(string: headerImage)) { phase in
-                            if let image = phase.image { image.resizable().scaledToFill() }
-                            else { Color.gray.opacity(0.3) }
-                        }
-                        .frame(height: 350)
-                        .clipped()
-                        .overlay(LinearGradient(colors: [.clear, .black], startPoint: .center, endPoint: .bottom))
+            ZStack {
+                Color.black.edgesIgnoringSafeArea(.all)
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
                         
-                        VStack(alignment: .leading) {
-                            Text("أهلاً بك في جسر اللوزية")
-                                .font(.system(size: 28, weight: .heavy))
-                                .foregroundColor(.white)
-                            Text("عيش المغامرة والاستجمام")
-                                .font(.subheadline).foregroundColor(.yellow)
+                        // 1. صورة الهيدر
+                        ZStack(alignment: .bottomLeading) {
+                            AsyncImage(url: URL(string: mainImage)) { phase in
+                                if let image = phase.image { image.resizable().scaledToFill() }
+                                else { Rectangle().fill(Color.gray.opacity(0.2)) }
+                            }
+                            .frame(height: 350)
+                            .clipped()
+                            .overlay(LinearGradient(colors: [.clear, .black], startPoint: .center, endPoint: .bottom))
+                            
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("منتجع جسر اللوزية")
+                                    .font(.system(size: 34, weight: .bold)).foregroundColor(.white)
+                                Text("وجهتك الفاخرة في أعالي الشفا")
+                                    .font(.subheadline).foregroundColor(.yellow)
+                            }
+                            .padding(20)
+                            .padding(.bottom, 20)
                         }
-                        .padding()
-                    }
-                    .ignoresSafeArea()
-                    
-                    VStack(spacing: 25) {
+                        .ignoresSafeArea(edges: .top)
                         
-                        // شريط الحالة (Live Status)
-                        VStack(alignment: .leading) {
-                            Text("📊 حالة الجلسات الآن").font(.headline).foregroundColor(.gray)
-                            HStack(spacing: 10) {
-                                ForEach(statuses) { item in
-                                    VStack {
-                                        Text(item.name).font(.caption).bold()
-                                        Text(item.status).font(.caption2).foregroundColor(item.color)
+                        VStack(spacing: 25) {
+                            
+                            // 2. بطاقة الطقس الجديدة (Six Flags Style)
+                            SixFlagsWeatherCard(weatherManager: weatherManager)
+                                .offset(y: -50) // تداخل مع الصورة
+                            
+                            // 3. تذاكر الدخول
+                            VStack(alignment: .leading, spacing: 15) {
+                                Text("🎫 تذاكر الدخول").font(.headline).foregroundColor(.white)
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text("تذكرة الفرد").foregroundColor(.gray).font(.caption)
+                                        Text("15 ريال").font(.title3).bold().foregroundColor(.yellow)
                                     }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(10)
-                                    .background(Color(UIColor.systemGray6).opacity(0.3))
-                                    .cornerRadius(10)
+                                    Spacer()
+                                    VStack(alignment: .trailing) {
+                                        Text("دخول مجاني").foregroundColor(.green).font(.caption)
+                                        Text("الأطفال < سنتين & ذوي الهمم").font(.caption2).foregroundColor(.white)
+                                    }
+                                }
+                                .padding()
+                                .background(Color(UIColor.systemGray6).opacity(0.3))
+                                .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+                            .offset(y: -30)
+                            
+                            // 4. عروض شحن الألعاب (البكجات)
+                            VStack(alignment: .leading, spacing: 15) {
+                                Text("🎮 عروض شحن الرصيد").font(.headline).foregroundColor(.white).padding(.horizontal)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 15) {
+                                        Spacer().frame(width: 10)
+                                        ForEach(packages) { pkg in
+                                            VStack {
+                                                Text("ادفع \(Int(pkg.pay))").font(.caption).foregroundColor(.white.opacity(0.7))
+                                                Text("\(Int(pkg.get))").font(.title).bold().foregroundColor(.white)
+                                                Text("رصيد").font(.caption2).foregroundColor(.white)
+                                            }
+                                            .padding()
+                                            .frame(width: 110, height: 110)
+                                            .background(pkg.color.opacity(0.6))
+                                            .cornerRadius(16)
+                                        }
+                                    }
                                 }
                             }
-                        }
-                        .padding(.horizontal)
-                        
-                        // الأزرار الكبيرة (Big Action Buttons)
-                        HStack(spacing: 15) {
-                            NavigationLink(destination: TicketPassView()) {
-                                ActionCard(icon: "ticket.fill", title: "تذاكري", subtitle: "إظهار الباركود", color: .blue)
-                            }
-                            NavigationLink(destination: FoodOrderView()) {
-                                ActionCard(icon: "fork.knife", title: "اطلب طعامك", subtitle: "تجاوز الانتظار", color: .orange)
-                            }
-                        }
-                        .padding(.horizontal)
-                        
-                        // زر الحجز السريع
-                        Link(destination: URL(string: "https://wa.me/966549949745")!) {
-                            HStack {
-                                Image(systemName: "calendar.badge.plus")
-                                Text("حجز جلسة خاصة الآن")
-                                    .fontWeight(.bold)
-                            }
-                            .frame(maxWidth: .infinity).padding().background(Color.yellow).foregroundColor(.black).cornerRadius(12)
-                        }
-                        .padding(.horizontal)
-                        
-                        // قسم الألعاب (Game Pass)
-                        VStack(alignment: .leading) {
-                            Text("🎮 بطاقة الألعاب").font(.headline).foregroundColor(.white)
-                            Image(systemName: "gamecontroller.fill")
-                                .font(.system(size: 50))
-                                .foregroundColor(.purple)
-                                .frame(maxWidth: .infinity)
+                            .offset(y: -20)
+                            
+                            // 5. زر الموقع
+                            Link(destination: googleMapsLink) {
+                                HStack {
+                                    Text("اتجه للموقع (Google Maps)")
+                                        .fontWeight(.bold)
+                                    Spacer()
+                                    Image(systemName: "paperplane.fill")
+                                }
                                 .padding()
-                                .background(Color.purple.opacity(0.2))
-                                .cornerRadius(15)
-                                .overlay(
-                                    Text("شحن الرصيد").font(.caption).bold().padding(5).background(Color.white).foregroundColor(.purple).cornerRadius(5).padding(),
-                                    alignment: .bottomTrailing
-                                )
+                                .frame(maxWidth: .infinity)
+                                .background(Color.blue)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+                            
+                            Spacer().frame(height: 50)
                         }
-                        .padding(.horizontal)
-                        
-                        Spacer(minLength: 50)
                     }
                 }
-                .background(Color.black)
             }
             .navigationBarHidden(true)
+            .onAppear { weatherManager.fetchWeather() }
         }
     }
 }
 
-// --- 2. تذكرتي (Digital Pass - Six Flags Style) ---
-struct TicketPassView: View {
-    var body: some View {
-        ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
-            VStack {
-                Text("تذكرة الدخول الرقمية").font(.headline).foregroundColor(.gray).padding(.top, 50)
-                
-                // تصميم الكرت
-                VStack(spacing: 20) {
-                    HStack {
-                        Image(systemName: "person.circle.fill").font(.largeTitle)
-                        VStack(alignment: .leading) {
-                            Text("ضيف المنتجع").font(.title2).bold()
-                            Text("عضوية زائر").font(.caption).foregroundColor(.gray)
-                        }
-                        Spacer()
-                        Image(systemName: "checkmark.seal.fill").foregroundColor(.yellow)
-                    }
-                    .padding(.bottom, 20)
-                    
-                    // الباركود الوهمي (محاكاة)
-                    Image(systemName: "qrcode")
-                        .resizable()
-                        .interpolation(.none)
-                        .scaledToFit()
-                        .frame(width: 200, height: 200)
-                        .foregroundColor(.black)
-                        .padding()
-                        .background(Color.white)
-                        .cornerRadius(10)
-                    
-                    Text("امسح الكود عند البوابة للدخول")
-                        .font(.caption).foregroundColor(.gray)
-                    
-                    Divider()
-                    
-                    HStack {
-                        VStack {
-                            Text("الرصيد").font(.caption).foregroundColor(.gray)
-                            Text("0.00 ﷼").bold()
-                        }
-                        Spacer()
-                        VStack {
-                            Text("الصلاحية").font(.caption).foregroundColor(.gray)
-                            Text("سارية").foregroundColor(.green).bold()
-                        }
-                    }
-                }
-                .padding(30)
-                .background(Color(UIColor.systemGray6))
-                .cornerRadius(20)
-                .padding()
-                .shadow(radius: 10)
-                
-                Spacer()
-            }
-        }
-    }
-}
-
-// --- 3. الطلبات (Visual Menu) ---
-struct FoodOrderView: View {
-    // قائمة الطعام (صور ومسميات)
-    let menuItems = [
-        MenuItem(name: "لاتيه حار", price: 18, image: "https://images.unsplash.com/photo-1541167760496-1628856ab772?w=400"),
-        MenuItem(name: "كيكة العسل", price: 25, image: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400"),
-        MenuItem(name: "موهيتو", price: 20, image: "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=400"),
-        MenuItem(name: "برجر مشوي", price: 35, image: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400"),
-        MenuItem(name: "بان كيك", price: 22, image: "https://images.unsplash.com/photo-1528207776546-365bb710ee93?w=400"),
-        MenuItem(name: "شاي بخار", price: 5, image: "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=400")
+// --- 2. صفحة الحجوزات ---
+struct BookingListView: View {
+    let sessions = [
+        SessionType(name: "البلورات (القباب)", price: 80, features: "إطلالة بانورامية • تكييف", imageURL: "https://images.unsplash.com/photo-1649170343284-5806dd601e3c?w=800&q=80"),
+        SessionType(name: "الأكواخ الريفية", price: 100, features: "مطلة على النهر • خصوصية", imageURL: "https://images.unsplash.com/photo-1587061949409-02df41d5e562?w=800&q=80"),
+        SessionType(name: "بيوت الشعر", price: 90, features: "جلسة تراثية • دافئة", imageURL: "https://images.unsplash.com/photo-1550586678-f7b288a2983b?w=800&q=80")
     ]
-    
-    let columns = [GridItem(.flexible()), GridItem(.flexible())]
     
     var body: some View {
         NavigationView {
             ZStack {
                 Color.black.edgesIgnoringSafeArea(.all)
                 ScrollView {
-                    VStack(alignment: .leading) {
-                        Text("قائمة الطعام").font(.largeTitle).bold().foregroundColor(.white).padding(.top)
-                        Text("اطلب الآن واستلم طلبك جاهزاً").font(.caption).foregroundColor(.gray)
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text("حجز الجلسات").font(.largeTitle).bold().foregroundColor(.white).padding(.top, 30).padding(.horizontal)
                         
-                        LazyVGrid(columns: columns, spacing: 20) {
-                            ForEach(menuItems) { item in
-                                Button(action: { sendOrder(item: item.name) }) {
-                                    VStack {
-                                        AsyncImage(url: URL(string: item.image)) { p in
-                                            if let img = p.image { img.resizable().scaledToFill() }
-                                            else { Color.gray }
-                                        }
-                                        .frame(height: 120)
-                                        .clipped()
-                                        
-                                        VStack(alignment: .leading) {
-                                            Text(item.name).bold().foregroundColor(.white)
-                                            Text("\(Int(item.price)) ﷼").font(.caption).foregroundColor(.yellow)
-                                        }
-                                        .padding(10)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .background(Color(UIColor.systemGray6).opacity(0.3))
-                                    .cornerRadius(15)
-                                }
+                        ForEach(sessions) { session in
+                            NavigationLink(destination: BookingFormView(session: session)) {
+                                SessionCardIOS(session: session)
                             }
                         }
-                        .padding(.top)
+                        Text("⚠️ الحجز غير مسترد").font(.caption).foregroundColor(.gray).padding()
+                    }
+                }
+            }
+            .navigationBarHidden(true)
+        }
+    }
+}
+
+// --- 3. صفحة الميزانية والحاسبة ---
+struct BudgetView: View {
+    @State private var people = 1
+    @State private var selectedPkg = 0.0
+    @State private var sessionPrice = 0.0
+    
+    var total: Int { Int((Double(people) * 15.0) + selectedPkg + sessionPrice) }
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.edgesIgnoringSafeArea(.all)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 25) {
+                        Text("حاسبة الميزانية").font(.largeTitle).bold().foregroundColor(.white).padding(.top, 30)
+                        
+                        VStack(alignment: .leading, spacing: 20) {
+                            HStack {
+                                Text("عدد الزوار (15 ريال/فرد)").foregroundColor(.white)
+                                Spacer()
+                                Stepper("\(people)", value: $people, in: 1...50).labelsHidden().background(Color.white).cornerRadius(8)
+                            }
+                            
+                            HStack {
+                                Text("شحن الألعاب").foregroundColor(.white)
+                                Spacer()
+                                Picker("", selection: $selectedPkg) {
+                                    Text("بدون").tag(0.0)
+                                    Text("100 (رصيد 110)").tag(100.0)
+                                    Text("300 (رصيد 350)").tag(300.0)
+                                    Text("750 (رصيد 1000)").tag(750.0)
+                                }.pickerStyle(MenuPickerStyle()).accentColor(.yellow)
+                            }
+                            
+                            HStack {
+                                Text("الجلسة").foregroundColor(.white)
+                                Spacer()
+                                Picker("", selection: $sessionPrice) {
+                                    Text("بدون").tag(0.0)
+                                    Text("بلورة (80)").tag(80.0)
+                                    Text("شعر (90)").tag(90.0)
+                                    Text("كوخ (100)").tag(100.0)
+                                }.pickerStyle(MenuPickerStyle()).accentColor(.yellow)
+                            }
+                            
+                            Divider().background(Color.gray)
+                            
+                            HStack {
+                                Text("الإجمالي المتوقع:").font(.title2).bold().foregroundColor(.white)
+                                Spacer()
+                                Text("\(total) ريال").font(.largeTitle).bold().foregroundColor(.green)
+                            }
+                        }
+                        .padding()
+                        .background(Color(UIColor.systemGray6).opacity(0.3))
+                        .cornerRadius(20)
+                        .padding(.horizontal)
+                        
+                        Spacer()
                     }
                     .padding()
                 }
@@ -283,69 +333,144 @@ struct FoodOrderView: View {
             .navigationBarHidden(true)
         }
     }
+}
+
+// --- 4. صفحة الخدمات ---
+struct ServicesView: View {
+    let services = [
+        ServiceItem(name: "قهوة/شاي", icon: "cup.and.saucer.fill"),
+        ServiceItem(name: "جمر", icon: "flame.fill"),
+        ServiceItem(name: "بطانيات", icon: "bed.double.fill"),
+        ServiceItem(name: "مساعدة", icon: "person.wave.2.fill")
+    ]
     
-    func sendOrder(item: String) {
-        let msg = "مرحباً، أرغب بطلب: \(item)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        if let url = URL(string: "https://wa.me/966549949745?text=\(msg)") { UIApplication.shared.open(url) }
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.edgesIgnoringSafeArea(.all)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 30) {
+                        Text("الخدمات").font(.largeTitle).bold().foregroundColor(.white).padding(.top, 30)
+                        
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
+                            ForEach(services) { item in
+                                Button(action: { 
+                                    let msg = "طلب خدمة: \(item.name)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                                    if let url = URL(string: "https://wa.me/966549949745?text=\(msg)") { UIApplication.shared.open(url) }
+                                }) {
+                                    VStack {
+                                        Image(systemName: item.icon).font(.largeTitle).foregroundColor(.yellow)
+                                        Text(item.name).bold().foregroundColor(.white).padding(.top, 5)
+                                    }
+                                    .frame(height: 100).frame(maxWidth: .infinity)
+                                    .background(Color(UIColor.systemGray6).opacity(0.3))
+                                    .cornerRadius(15)
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                }
+            }
+            .navigationBarHidden(true)
+        }
     }
 }
 
-// --- 4. الخريطة (Resort Map) ---
-struct ResortMapView: View {
-    @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 21.1224671, longitude: 40.3190809),
-        span: MKCoordinateSpan(latitudeDelta: 0.003, longitudeDelta: 0.003)
-    )
-    let locations = [LocationPoint(name: "منتجع جسر اللوزية", coordinate: CLLocationCoordinate2D(latitude: 21.1224671, longitude: 40.3190809))]
+// ==========================================
+// MARK: - 6. المكونات (UI Components)
+// ==========================================
+
+// بطاقة الطقس البيضاء (Six Flags Style)
+struct SixFlagsWeatherCard: View {
+    @ObservedObject var weatherManager: WeatherManager
+    let forecast = [
+        (day: "الإثنين", icon: "sun.max.fill", temp: "26°", color: Color.orange),
+        (day: "الثلاثاء", icon: "cloud.fill", temp: "22°", color: Color.blue),
+        (day: "الأربعاء", icon: "cloud.rain.fill", temp: "19°", color: Color.gray),
+        (day: "الخميس", icon: "cloud.fog.fill", temp: "18°", color: Color.purple)
+    ]
     
+    var body: some View {
+        VStack(spacing: 15) {
+            HStack {
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text(weatherManager.temperature).font(.system(size: 45, weight: .bold)).foregroundColor(.black)
+                        Image(systemName: weatherManager.icon).font(.system(size: 35)).foregroundColor(.orange)
+                    }
+                    Text(weatherManager.condition).font(.caption).bold().foregroundColor(.gray)
+                }
+                Spacer()
+                VStack(alignment: .trailing) {
+                    Text("الطقس اليوم").font(.caption).foregroundColor(.gray)
+                    Text("الشفا").bold().foregroundColor(.black)
+                }
+            }
+            Divider()
+            HStack(spacing: 0) {
+                ForEach(forecast, id: \.day) { item in
+                    VStack(spacing: 5) {
+                        Text(item.day).font(.caption2).foregroundColor(.gray)
+                        Image(systemName: item.icon).foregroundColor(item.color)
+                        Text(item.temp).font(.caption).bold().foregroundColor(.black)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(20)
+        .background(Color.white)
+        .cornerRadius(20)
+        .shadow(radius: 10)
+        .padding(.horizontal)
+    }
+}
+
+struct SessionCardIOS: View {
+    let session: SessionType
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            AsyncImage(url: URL(string: session.imageURL)) { phase in
+                if let image = phase.image { image.resizable().scaledToFill().frame(height: 200).clipped() }
+                else { Color.gray.frame(height: 200) }
+            }
+            .overlay(LinearGradient(colors: [.clear, .black], startPoint: .center, endPoint: .bottom))
+            
+            VStack(alignment: .leading) {
+                HStack {
+                    Text(session.name).bold().foregroundColor(.white)
+                    Spacer()
+                    Text("\(Int(session.price)) ﷼").font(.caption).bold().padding(6).background(Color.yellow).foregroundColor(.black).cornerRadius(8)
+                }
+                Text(session.features).font(.caption).foregroundColor(.gray)
+            }
+            .padding()
+        }
+        .cornerRadius(16).padding(.horizontal)
+    }
+}
+
+struct BookingFormView: View {
+    let session: SessionType
+    @State private var name = ""; @State private var count = ""; @State private var date = Date()
     var body: some View {
         ZStack {
-            Map(coordinateRegion: $region, annotationItems: locations) { loc in
-                MapMarker(coordinate: loc.coordinate, tint: .red)
-            }
-            .edgesIgnoringSafeArea(.top)
-            
-            VStack {
-                Spacer()
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("موقع المنتجع").bold()
-                        Text("الشفا، الطائف").font(.caption).foregroundColor(.gray)
-                    }
-                    Spacer()
-                    Link(destination: URL(string: "https://www.google.com/maps/search/?api=1&query=21.1224671,40.3190809")!) {
-                        Image(systemName: "car.fill")
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .clipShape(Circle())
-                    }
+            Color.black.edgesIgnoringSafeArea(.all)
+            VStack(spacing: 20) {
+                Text("حجز \(session.name)").font(.title).bold().foregroundColor(.white).padding(.top)
+                TextField("الاسم", text: $name).padding().background(Color.white).cornerRadius(10).foregroundColor(.black).padding(.horizontal)
+                TextField("العدد", text: $count).keyboardType(.numberPad).padding().background(Color.white).cornerRadius(10).foregroundColor(.black).padding(.horizontal)
+                DatePicker("الوقت", selection: $date).colorScheme(.dark).padding(.horizontal)
+                Button(action: {
+                    let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm"
+                    let msg = "حجز:\n🏠 \(session.name)\n👤 \(name)\n👥 \(count)\n📅 \(f.string(from: date))".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                    if let url = URL(string: "https://wa.me/966549949745?text=\(msg)") { UIApplication.shared.open(url) }
+                }) {
+                    Text("تأكيد (واتساب)").bold().frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(15).padding()
                 }
-                .padding()
-                .background(Color.white)
-                .cornerRadius(20)
-                .padding()
-                .shadow(radius: 10)
+                Spacer()
             }
         }
-    }
-}
-
-// ==========================================
-// MARK: - 5. UI COMPONENTS
-// ==========================================
-
-struct ActionCard: View {
-    let icon: String, title: String, subtitle: String, color: Color
-    var body: some View {
-        VStack(alignment: .leading) {
-            Image(systemName: icon).font(.largeTitle).foregroundColor(color).padding(.bottom, 5)
-            Text(title).font(.headline).bold().foregroundColor(.white)
-            Text(subtitle).font(.caption).foregroundColor(.gray)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(UIColor.systemGray6).opacity(0.3))
-        .cornerRadius(15)
     }
 }
