@@ -198,7 +198,7 @@ struct HomeView: View {
                                 SectionTitle(title: "تذاكر الدخول")
                                 HStack(spacing: 15) {
                                     TicketCard(title: "تذكرة فرد", price: "15 ﷼", subtitle: "للشخص الواحد")
-                                    TicketCard(title: "دخول مجاني", price: "0 ﷼", subtitle: "أطفال < 2 / ذوي الهمم")
+                                    TicketCard(title: "دخول مجاني", price: "0 ﷼", subtitle: "أطفال أقل من سنتين / ذوي الهمم")
                                 }
                             }
                             .padding(.horizontal)
@@ -250,9 +250,9 @@ struct HomeView: View {
 // --- 2. الحجوزات (Booking) ---
 struct BookingListView: View {
     let sessions = [
-        SessionType(name: "البلورات الملكية", price: 80, features: "إطلالة بانورامية • تكييف", imageURL: "https://images.unsplash.com/photo-1649170343284-5806dd601e3c?w=800&q=80"),
-        SessionType(name: "أكواخ النهر", price: 100, features: "خصوصية تامة • صوت الماء", imageURL: "https://images.unsplash.com/photo-1587061949409-02df41d5e562?w=800&q=80"),
-        SessionType(name: "مجلس تراثي", price: 90, features: "أجواء دافئة • شبة نار", imageURL: "https://images.unsplash.com/photo-1550586678-f7b288a2983b?w=800&q=80")
+        SessionType(name: "البلورات", price: 80, features: "خصوصية تامة • تكييف", imageURL: "https://images.unsplash.com/photo-1649170343284-5806dd601e3c?w=800&q=80"),
+        SessionType(name: "أكواخ", price: 100, features: "خصوصية تامة • صوت الماء", imageURL: "https://images.unsplash.com/photo-1587061949409-02df41d5e562?w=800&q=80"),
+        SessionType(name: "مجلس تراثي", price: 90, features: "أجواء دافئة • خصوصية تامة", imageURL: "https://images.unsplash.com/photo-1550586678-f7b288a2983b?w=800&q=80")
     ]
     
     var body: some View {
@@ -354,7 +354,7 @@ struct BudgetView: View {
                             HStack {
                                 Text("الزوار").foregroundColor(.gray)
                                 Spacer()
-                                Stepper("\(people)", value: $people, in: 1...30).labelsHidden().background(Color.white).cornerRadius(8)
+                                Stepper("\(people)", value: $people, in: 0...30).labelsHidden().background(Color.white).cornerRadius(8)
                             }
                             // الجلسة
                             VStack(alignment: .leading) {
@@ -372,7 +372,9 @@ struct BudgetView: View {
                                 Picker("", selection: $pkgCost) {
                                     Text("بدون").tag(0.0)
                                     Text("100").tag(100.0)
+                                    Text("200").tag(200.0)
                                     Text("300").tag(300.0)
+                                    Text("500").tag(500.0)
                                     Text("750").tag(750.0)
                                 }.pickerStyle(SegmentedPickerStyle()).colorScheme(.dark)
                             }
