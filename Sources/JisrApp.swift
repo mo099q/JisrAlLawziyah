@@ -3,12 +3,27 @@ import MapKit
 import CoreLocation
 
 // ==========================================
+// MARK: - App Configuration (قابل للتعديل)
+// ==========================================
+struct AppConfig {
+    static let contactPhone = "966567963864"
+    static let whatsappURL = "https://wa.me/\(966567963864)?text="
+    static let snapchatURL = "https://www.snapchat.com/add/jsrlawzia"
+    static let tiktokURL = "https://www.tiktok.com/@jsrlawzia"
+    static let instagramURL = "https://instagram.com/jsrlawzia"
+    static let headerImageURL = "https://images.unsplash.com/photo-1600607686527-6fb886090705?w=1800&q=80"
+    static let logoAsset = "jisr_logo"
+    static let targetLatitude = 21.1224671
+    static let targetLongitude = 40.3190809
+}
+
+// ==========================================
 // MARK: - 1. إعدادات الألوان الفاخرة
 // ==========================================
 extension Color {
     static let luxuryGold = Color(red: 0.83, green: 0.68, blue: 0.21) // ذهبي
     static let deepBlack = Color(red: 0.02, green: 0.02, blue: 0.03) // أسود عميق
-    static let glass = Color.white.opacity(0.1) // زجاجي
+    static let glass = Color.white.opacity(0.08) // زجاجي
 }
 
 // ==========================================
@@ -36,42 +51,84 @@ struct ServiceItem: Identifiable {
 // ==========================================
 // MARK: - 3. المدراء (Logic)
 // ==========================================
+@MainActor
 class WeatherManager: ObservableObject {
     @Published var temperature: String = "--"
     @Published var condition: String = ".."
     @Published var icon: String = "moon.stars.fill"
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String? = nil
     
-    func fetchWeather() {
+    func fetchWeather() async {
+        isLoading = true
+        errorMessage = nil
         let urlString = "https://api.open-meteo.com/v1/forecast?latitude=21.1224&longitude=40.3190&current_weather=true"
-        guard let url = URL(string: urlString) else { return }
-        URLSession.shared.dataTask(with: url) { data, _, _ in
-            guard let data = data, let decoded = try? JSONDecoder().decode(WeatherResponse.self, from: data) else { return }
-            DispatchQueue.main.async {
-                self.temperature = "\(Int(decoded.current_weather.temperature))°"
-                let t = decoded.current_weather.temperature
-                if t < 15 { self.condition = "أجواء باردة"; self.icon = "thermometer.snowflake" }
-                else { self.condition = "أجواء معتدلة"; self.icon = "moon.stars.fill" }
+        guard let url = URL(string: urlString) else {
+            self.errorMessage = "رابط الطقس غير صالح"
+            self.isLoading = false
+            return
+        }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let decoded = try JSONDecoder().decode(WeatherResponse.self, from: data)
+            let t = decoded.current_weather.temperature
+            self.temperature = "\(Int(t))°"
+            if t < 15 {
+                self.condition = "أجواء باردة"
+                self.icon = "thermometer.snowflake"
+            } else {
+                self.condition = "أجواء معتدلة"
+                self.icon = "sun.max.fill"
             }
-        }.resume()
+        } catch {
+            self.errorMessage = "تعذّر جلب الطقس"
+        }
+        isLoading = false
     }
 }
 
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     @Published var distanceText: String = "..."
-    let targetLoc = CLLocation(latitude: 21.1224671, longitude: 40.3190809)
+    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    let targetLoc = CLLocation(latitude: AppConfig.targetLatitude, longitude: AppConfig.targetLongitude)
     
     override init() {
         super.init()
         manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.requestWhenInUseAuthorization()
-        manager.startUpdatingLocation()
+    }
+    
+    func start() {
+        if CLLocationManager.locationServicesEnabled() {
+            manager.startUpdatingLocation()
+        }
+    }
+    
+    func stop() {
+        manager.stopUpdatingLocation()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        DispatchQueue.main.async {
+            self.authorizationStatus = status
+            if status == .authorizedWhenInUse || status == .authorizedAlways {
+                self.manager.startUpdatingLocation()
+            } else {
+                self.manager.stopUpdatingLocation()
+            }
+        }
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let loc = locations.last else { return }
         let dist = loc.distance(from: targetLoc) / 1000
         DispatchQueue.main.async { self.distanceText = dist < 0.5 ? "وصلت" : String(format: "%.1f كم", dist) }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        DispatchQueue.main.async { self.distanceText = "خطأ بالموقع" }
     }
 }
 
@@ -124,8 +181,8 @@ struct HomeView: View {
     @StateObject var weatherManager = WeatherManager()
     @StateObject var locationManager = LocationManager()
     
-    let mainImage = "https://images.unsplash.com/photo-1600607686527-6fb886090705?w=800&q=80"
-    let googleMapsLink = URL(string: "https://www.google.com/maps/search/?api=1&query=21.1224671,40.3190809")!
+    let mainImage = AppConfig.headerImageURL
+    let googleMapsLink = URL(string: "https://www.google.com/maps/search/?api=1&query=\(AppConfig.targetLatitude),\(AppConfig.targetLongitude)")!
     
     let packages = [
         GamePackage(pay: 100, get: 110), GamePackage(pay: 200, get: 230),
@@ -141,28 +198,7 @@ struct HomeView: View {
                     VStack(spacing: 0) {
                         
                         // الهيدر الفاخر
-                        ZStack(alignment: .bottom) {
-                            AsyncImage(url: URL(string: mainImage)) { p in
-                                if let i = p.image { i.resizable().scaledToFill() } else { Color.gray.opacity(0.2) }
-                            }
-                            .frame(height: 420)
-                            .clipped()
-                            .overlay(LinearGradient(colors: [.deepBlack, .clear], startPoint: .bottom, endPoint: .center))
-                            
-                            VStack(spacing: 5) {
-                                Text("JISR RESORT")
-                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.luxuryGold)
-                                    .tracking(3) // تباعد الأحرف
-                                
-                                Text("منتجع جسر اللوزية")
-                                    .font(.system(size: 36, weight: .heavy, design: .serif))
-                                    .foregroundColor(.white)
-                                    .shadow(color: .black.opacity(0.5), radius: 10)
-                            }
-                            .padding(.bottom, 60)
-                        }
-                        .ignoresSafeArea()
+                        HeaderHero(imageURL: mainImage, title: "JISR RESORT", subtitle: "منتجع جسر اللوزية", logoAsset: AppConfig.logoAsset)
                         
                         VStack(spacing: 30) {
                             
@@ -198,7 +234,7 @@ struct HomeView: View {
                                 SectionTitle(title: "تذاكر الدخول")
                                 HStack(spacing: 15) {
                                     TicketCard(title: "تذكرة فرد", price: "15 ﷼", subtitle: "للشخص الواحد")
-                                    TicketCard(title: "دخول مجاني", price: "0 ﷼", subtitle: "أطفال أقل من سنتين / ذوي الهمم")
+                                    TicketCard(title: "دخول مجاني", price: "0 ﷼", subtitle: "أطفال < 2 / ذوي الهمم")
                                 }
                             }
                             .padding(.horizontal)
@@ -227,22 +263,19 @@ struct HomeView: View {
                             }
                             
                             // التواصل
-                            VStack(spacing: 20) {
-                                Divider().background(Color.white.opacity(0.1))
-                                Text("تواصل معنا").font(.caption).foregroundColor(.gray).tracking(2)
-                                HStack(spacing: 40) {
-                                    SocialIcon(icon: "phone.fill", url: "https://wa.me/966549949745")
-                                    SocialIcon(icon: "camera.fill", url: "https://www.snapchat.com/add/jsrlawzia")
-                                    SocialIcon(icon: "play.fill", url: "https://www.tiktok.com/@jsrlawzia")
-                                }
-                            }
-                            .padding(.bottom, 100)
+                            SocialSection()
+                                .padding(.bottom, 100)
                         }
                     }
                 }
             }
             .navigationBarHidden(true)
-            .onAppear { weatherManager.fetchWeather() }
+            .onAppear {
+                Task {
+                    await weatherManager.fetchWeather()
+                }
+                locationManager.start()
+            }
         }
     }
 }
@@ -250,9 +283,9 @@ struct HomeView: View {
 // --- 2. الحجوزات (Booking) ---
 struct BookingListView: View {
     let sessions = [
-        SessionType(name: "البلورات", price: 80, features: "خصوصية تامة • تكييف", imageURL: "https://images.unsplash.com/photo-1649170343284-5806dd601e3c?w=800&q=80"),
-        SessionType(name: "أكواخ", price: 100, features: "خصوصية تامة • صوت الماء", imageURL: "https://images.unsplash.com/photo-1587061949409-02df41d5e562?w=800&q=80"),
-        SessionType(name: "مجلس تراثي", price: 90, features: "أجواء دافئة • خصوصية تامة", imageURL: "https://images.unsplash.com/photo-1550586678-f7b288a2983b?w=800&q=80")
+        SessionType(name: "البلورات الملكية", price: 80, features: "إطلالة بانورامية • تكييف", imageURL: "https://images.unsplash.com/photo-1649170343284-5806dd601e3c?w=800&q=80"),
+        SessionType(name: "أكواخ النهر", price: 100, features: "خصوصية تامة • صوت الماء", imageURL: "https://images.unsplash.com/photo-1587061949409-02df41d5e562?w=800&q=80"),
+        SessionType(name: "مجلس تراثي", price: 90, features: "أجواء دافئة • شبة نار", imageURL: "https://images.unsplash.com/photo-1550586678-f7b288a2983b?w=800&q=80")
     ]
     
     var body: some View {
@@ -310,6 +343,7 @@ struct ServicesView: View {
                                     .background(Color.glass).cornerRadius(25)
                                     .overlay(RoundedRectangle(cornerRadius: 25).stroke(Color.white.opacity(0.05)))
                                 }
+                                .accessibilityLabel(Text("خدمة \(item.name)"))
                             }
                         }
                         
@@ -323,6 +357,7 @@ struct ServicesView: View {
                                     Image(systemName: "arrow.up.circle.fill")
                                         .font(.largeTitle).foregroundColor(.luxuryGold)
                                 }
+                                .accessibilityLabel(Text("إرسال بلاغ المفقودات"))
                             }
                         }
                     }
@@ -354,7 +389,7 @@ struct BudgetView: View {
                             HStack {
                                 Text("الزوار").foregroundColor(.gray)
                                 Spacer()
-                                Stepper("\(people)", value: $people, in: 0...30).labelsHidden().background(Color.white).cornerRadius(8)
+                                Stepper("\(people)", value: $people, in: 1...30).labelsHidden().background(Color.white).cornerRadius(8)
                             }
                             // الجلسة
                             VStack(alignment: .leading) {
@@ -372,9 +407,7 @@ struct BudgetView: View {
                                 Picker("", selection: $pkgCost) {
                                     Text("بدون").tag(0.0)
                                     Text("100").tag(100.0)
-                                    Text("200").tag(200.0)
                                     Text("300").tag(300.0)
-                                    Text("500").tag(500.0)
                                     Text("750").tag(750.0)
                                 }.pickerStyle(SegmentedPickerStyle()).colorScheme(.dark)
                             }
@@ -403,17 +436,77 @@ struct BudgetView: View {
 // MARK: - 6. المكونات الفاخرة (UI Components)
 // ==========================================
 
+struct HeaderHero: View {
+    let imageURL: String
+    let title: String
+    let subtitle: String
+    let logoAsset: String?
+    
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            AsyncImage(url: URL(string: imageURL)) { phase in
+                switch phase {
+                case .empty:
+                    Color.gray.opacity(0.15)
+                case .success(let img):
+                    img.resizable().scaledToFill()
+                case .failure:
+                    Color.gray
+                @unknown default:
+                    Color.gray
+                }
+            }
+            .frame(height: 420)
+            .clipped()
+            .overlay(LinearGradient(colors: [.deepBlack.opacity(0.8), .clear], startPoint: .bottom, endPoint: .center))
+            .cornerRadius(0)
+            
+            HStack(alignment: .center, spacing: 12) {
+                if let logo = logoAsset, UIImage(named: logo) != nil {
+                    Image(logo)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 56, height: 56)
+                        .background(Color.black.opacity(0.35))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .padding(.leading, 18)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 28, weight: .heavy, design: .serif))
+                        .foregroundColor(.luxuryGold)
+                        .tracking(2)
+                    Text(subtitle)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(.white)
+                }
+                .padding(.vertical, 18)
+                Spacer()
+            }
+            .padding(.bottom, 40)
+        }
+        .ignoresSafeArea(edges: .top)
+    }
+}
+
 // بطاقة الطقس البيضاء (مثل Six Flags)
 struct WeatherCard: View {
     @ObservedObject var manager: WeatherManager
     var body: some View {
         HStack {
             VStack(alignment: .leading) {
+                if manager.isLoading {
+                    ProgressView().progressViewStyle(CircularProgressViewStyle(tint: .black))
+                }
                 HStack {
                     Text(manager.temperature).font(.system(size: 50, weight: .light)).foregroundColor(.black)
                     Image(systemName: manager.icon).font(.largeTitle).foregroundColor(.luxuryGold)
                 }
                 Text(manager.condition).font(.caption).bold().foregroundColor(.gray)
+                if let err = manager.errorMessage {
+                    Text(err).font(.caption2).foregroundColor(.red)
+                }
             }
             Spacer()
             VStack(alignment: .trailing) {
@@ -499,13 +592,71 @@ struct BookingFormView: View {
     }
 }
 
-struct SocialIcon: View {
-    let icon: String, url: String
+// Social / Contact components
+struct SocialIconView: View {
+    let assetName: String?    // اسم الصورة في Assets (يفضل)
+    let systemName: String?   // بديل SF Symbol
+    let urlString: String
+    let label: String         // للوصولية
+    
+    @Environment(\.openURL) var openURL
+    
     var body: some View {
-        Button(action: { if let u = URL(string: url) { UIApplication.shared.open(u) } }) {
-            Image(systemName: icon).font(.system(size: 30)).foregroundColor(.white)
-                .padding(15).background(Color.glass).clipShape(Circle())
+        Button(action: {
+            guard let url = URL(string: urlString) else { return }
+            openURL(url)
+        }) {
+            Group {
+                if let asset = assetName, UIImage(named: asset) != nil {
+                    Image(asset)
+                        .resizable()
+                        .scaledToFit()
+                } else if let s = systemName {
+                    Image(systemName: s)
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundColor(.white)
+                } else {
+                    Image(systemName: "link")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundColor(.white)
+                }
+            }
+            .frame(width: 36, height: 36)
+            .padding(12)
+            .background(Color.glass)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(Color.luxuryGold.opacity(0.08), lineWidth: 1))
+            .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
+            .accessibilityLabel(Text(label))
         }
+    }
+}
+
+struct SocialSection: View {
+    let socials = [
+        ("Snapchat", "snapchatIcon", AppConfig.snapchatURL, "سناب شات"),
+        ("WhatsApp", "whatsappIcon", AppConfig.whatsappURL + "مرحبا", "واتساب"),
+        ("TikTok", "tiktokIcon", AppConfig.tiktokURL, "تيك توك"),
+        ("Instagram", "instagramIcon", AppConfig.instagramURL, "انستقرام"),
+        ("X", "xIcon", "https://x.com/jsrlawzia", "X")
+    ]
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Divider().background(Color.white.opacity(0.1))
+            Text("تواصل معنا").font(.caption).foregroundColor(.gray).tracking(2)
+            HStack(spacing: 24) {
+                ForEach(socials, id: \.0) { item in
+                    SocialIconView(assetName: item.1, systemName: nil, urlString: item.2, label: item.3)
+                }
+            }
+            .padding(.vertical, 6)
+            .padding(.horizontal, 12)
+            Divider().background(Color.white.opacity(0.06))
+        }
+        .padding(.horizontal)
     }
 }
 
@@ -519,5 +670,7 @@ struct SectionTitle: View {
 
 func openWhatsApp(msg: String) {
     let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-    if let url = URL(string: "https://wa.me/966549949745?text=\(encoded)") { UIApplication.shared.open(url) }
+    if let url = URL(string: AppConfig.whatsappURL + encoded) {
+        UIApplication.shared.open(url)
+    }
 }
