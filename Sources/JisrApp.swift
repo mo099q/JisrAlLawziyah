@@ -3,9 +3,17 @@ import MapKit
 import CoreLocation
 
 // ==========================================
-// MARK: - 1. نماذج البيانات
+// MARK: - 1. إعدادات الألوان الفاخرة
 // ==========================================
+extension Color {
+    static let luxuryGold = Color(red: 0.83, green: 0.68, blue: 0.21) // ذهبي
+    static let deepBlack = Color(red: 0.02, green: 0.02, blue: 0.03) // أسود عميق
+    static let glass = Color.white.opacity(0.1) // زجاجي
+}
 
+// ==========================================
+// MARK: - 2. نماذج البيانات
+// ==========================================
 struct WeatherResponse: Codable { let current_weather: CurrentWeather }
 struct CurrentWeather: Codable { let temperature: Double; let weathercode: Int }
 
@@ -14,7 +22,7 @@ struct LocationPoint: Identifiable {
 }
 
 struct GamePackage: Identifiable {
-    let id = UUID(); let pay: Double; let get: Double; let color: Color
+    let id = UUID(); let pay: Double; let get: Double
 }
 
 struct SessionType: Identifiable {
@@ -26,26 +34,23 @@ struct ServiceItem: Identifiable {
 }
 
 // ==========================================
-// MARK: - 2. المدراء (الطقس والموقع)
+// MARK: - 3. المدراء (Logic)
 // ==========================================
-
 class WeatherManager: ObservableObject {
     @Published var temperature: String = "--"
-    @Published var condition: String = "جاري التحميل"
+    @Published var condition: String = ".."
     @Published var icon: String = "moon.stars.fill"
     
     func fetchWeather() {
-        // إحداثيات المنتجع (21.1224, 40.3190)
         let urlString = "https://api.open-meteo.com/v1/forecast?latitude=21.1224&longitude=40.3190&current_weather=true"
         guard let url = URL(string: urlString) else { return }
         URLSession.shared.dataTask(with: url) { data, _, _ in
             guard let data = data, let decoded = try? JSONDecoder().decode(WeatherResponse.self, from: data) else { return }
             DispatchQueue.main.async {
                 self.temperature = "\(Int(decoded.current_weather.temperature))°"
-                let code = decoded.current_weather.weathercode
-                if code > 50 { self.condition = "ممطر/ضباب"; self.icon = "cloud.fog.fill" }
-                else if decoded.current_weather.temperature < 15 { self.condition = "بارد جداً"; self.icon = "thermometer.snowflake" }
-                else { self.condition = "أجواء صافية"; self.icon = "moon.stars.fill" }
+                let t = decoded.current_weather.temperature
+                if t < 15 { self.condition = "أجواء باردة"; self.icon = "thermometer.snowflake" }
+                else { self.condition = "أجواء معتدلة"; self.icon = "moon.stars.fill" }
             }
         }.resume()
     }
@@ -54,29 +59,36 @@ class WeatherManager: ObservableObject {
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     @Published var distanceText: String = "..."
-    let targetCoordinate = CLLocationCoordinate2D(latitude: 21.1224671, longitude: 40.3190809)
-    var targetLocation: CLLocation { CLLocation(latitude: targetCoordinate.latitude, longitude: targetCoordinate.longitude) }
+    let targetLoc = CLLocation(latitude: 21.1224671, longitude: 40.3190809)
     
     override init() {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.requestWhenInUseAuthorization()
         manager.startUpdatingLocation()
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
-        let dist = location.distance(from: targetLocation) / 1000
-        DispatchQueue.main.async { self.distanceText = dist < 0.5 ? "وصلت للموقع" : String(format: "%.1f كم", dist) }
+        guard let loc = locations.last else { return }
+        let dist = loc.distance(from: targetLoc) / 1000
+        DispatchQueue.main.async { self.distanceText = dist < 0.5 ? "وصلت" : String(format: "%.1f كم", dist) }
     }
 }
 
 // ==========================================
-// MARK: - 3. التطبيق الرئيسي
+// MARK: - 4. التطبيق والتبويبات
 // ==========================================
 @main
 struct JisrApp: App {
+    init() {
+        // تخصيص البار السفلي ليكون شفافاً مع ضبابية (Blur)
+        let appearance = UITabBarAppearance()
+        appearance.configureWithTransparentBackground()
+        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
+    
     var body: some Scene {
         WindowGroup {
             MainTabView().preferredColorScheme(.dark)
@@ -84,38 +96,30 @@ struct JisrApp: App {
     }
 }
 
-// ==========================================
-// MARK: - 4. التبويبات
-// ==========================================
 struct MainTabView: View {
-    init() {
-        UITabBar.appearance().backgroundColor = UIColor.black
-        UITabBar.appearance().barTintColor = UIColor.black
-    }
-
     var body: some View {
         TabView {
             HomeView()
-                .tabItem { Label("الرئيسية", systemImage: "house.fill") }
+                .tabItem { Label("الرئيسية", systemImage: "house") }
             
             BookingListView()
                 .tabItem { Label("الحجوزات", systemImage: "calendar") }
             
             ServicesView()
-                .tabItem { Label("الخدمات", systemImage: "bell.fill") }
+                .tabItem { Label("الخدمات", systemImage: "bell") }
             
             BudgetView()
-                .tabItem { Label("الميزانية", systemImage: "banknote") }
+                .tabItem { Label("الألعاب", systemImage: "gamecontroller") }
         }
-        .accentColor(.yellow)
+        .accentColor(.luxuryGold)
     }
 }
 
 // ==========================================
-// MARK: - 5. الشاشات
+// MARK: - 5. الصفحات الرئيسية
 // ==========================================
 
-// --- 1. الصفحة الرئيسية (المحدثة) ---
+// --- 1. الرئيسية (Home) ---
 struct HomeView: View {
     @StateObject var weatherManager = WeatherManager()
     @StateObject var locationManager = LocationManager()
@@ -123,110 +127,116 @@ struct HomeView: View {
     let mainImage = "https://images.unsplash.com/photo-1600607686527-6fb886090705?w=800&q=80"
     let googleMapsLink = URL(string: "https://www.google.com/maps/search/?api=1&query=21.1224671,40.3190809")!
     
-    // بكجات الألعاب
     let packages = [
-        GamePackage(pay: 100, get: 110, color: .purple),
-        GamePackage(pay: 200, get: 230, color: .blue),
-        GamePackage(pay: 300, get: 350, color: .orange),
-        GamePackage(pay: 500, get: 600, color: .green),
-        GamePackage(pay: 750, get: 1000, color: .red)
+        GamePackage(pay: 100, get: 110), GamePackage(pay: 200, get: 230),
+        GamePackage(pay: 500, get: 600), GamePackage(pay: 750, get: 1000)
     ]
 
     var body: some View {
         NavigationView {
             ZStack {
-                Color.black.edgesIgnoringSafeArea(.all)
+                Color.deepBlack.edgesIgnoringSafeArea(.all)
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
                         
-                        // 1. صورة الهيدر
-                        ZStack(alignment: .bottomLeading) {
-                            AsyncImage(url: URL(string: mainImage)) { phase in
-                                if let image = phase.image { image.resizable().scaledToFill() }
-                                else { Rectangle().fill(Color.gray.opacity(0.2)) }
+                        // الهيدر الفاخر
+                        ZStack(alignment: .bottom) {
+                            AsyncImage(url: URL(string: mainImage)) { p in
+                                if let i = p.image { i.resizable().scaledToFill() } else { Color.gray.opacity(0.2) }
                             }
-                            .frame(height: 350)
+                            .frame(height: 420)
                             .clipped()
-                            .overlay(LinearGradient(colors: [.clear, .black], startPoint: .center, endPoint: .bottom))
+                            .overlay(LinearGradient(colors: [.deepBlack, .clear], startPoint: .bottom, endPoint: .center))
                             
-                            VStack(alignment: .leading, spacing: 5) {
+                            VStack(spacing: 5) {
+                                Text("JISR RESORT")
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.luxuryGold)
+                                    .tracking(3) // تباعد الأحرف
+                                
                                 Text("منتجع جسر اللوزية")
-                                    .font(.system(size: 34, weight: .bold)).foregroundColor(.white)
-                                Text("وجهتك الفاخرة في أعالي الشفا")
-                                    .font(.subheadline).foregroundColor(.yellow)
+                                    .font(.system(size: 36, weight: .heavy, design: .serif))
+                                    .foregroundColor(.white)
+                                    .shadow(color: .black.opacity(0.5), radius: 10)
                             }
-                            .padding(20)
-                            .padding(.bottom, 20)
+                            .padding(.bottom, 60)
                         }
-                        .ignoresSafeArea(edges: .top)
+                        .ignoresSafeArea()
                         
-                        VStack(spacing: 25) {
+                        VStack(spacing: 30) {
                             
-                            // 2. بطاقة الطقس الجديدة (Six Flags Style)
-                            SixFlagsWeatherCard(weatherManager: weatherManager)
-                                .offset(y: -50) // تداخل مع الصورة
+                            // بطاقة الطقس البيضاء (Six Flags Style)
+                            WeatherCard(manager: weatherManager)
+                                .offset(y: -50)
                             
-                            // 3. تذاكر الدخول
-                            VStack(alignment: .leading, spacing: 15) {
-                                Text("🎫 تذاكر الدخول").font(.headline).foregroundColor(.white)
+                            // زر التوجيه الذهبي
+                            Link(destination: googleMapsLink) {
                                 HStack {
                                     VStack(alignment: .leading) {
-                                        Text("تذكرة الفرد").foregroundColor(.gray).font(.caption)
-                                        Text("15 ريال").font(.title3).bold().foregroundColor(.yellow)
+                                        Text("المسافة من موقعك").font(.caption).foregroundColor(.black.opacity(0.6))
+                                        Text(locationManager.distanceText).font(.title3).bold().foregroundColor(.black)
                                     }
                                     Spacer()
-                                    VStack(alignment: .trailing) {
-                                        Text("دخول مجاني").foregroundColor(.green).font(.caption)
-                                        Text("الأطفال < سنتين & ذوي الهمم").font(.caption2).foregroundColor(.white)
+                                    HStack {
+                                        Text("توجيه").bold()
+                                        Image(systemName: "arrow.up.right")
                                     }
+                                    .padding(.vertical, 8).padding(.horizontal, 15)
+                                    .background(Color.black).foregroundColor(.luxuryGold).cornerRadius(20)
                                 }
                                 .padding()
-                                .background(Color(UIColor.systemGray6).opacity(0.3))
-                                .cornerRadius(12)
+                                .background(LinearGradient(colors: [.luxuryGold, .yellow], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .cornerRadius(20)
+                                .shadow(color: .luxuryGold.opacity(0.3), radius: 15)
                             }
                             .padding(.horizontal)
                             .offset(y: -30)
                             
-                            // 4. عروض شحن الألعاب (البكجات)
+                            // قسم التذاكر
+                            VStack(alignment: .leading, spacing: 20) {
+                                SectionTitle(title: "تذاكر الدخول")
+                                HStack(spacing: 15) {
+                                    TicketCard(title: "تذكرة فرد", price: "15 ﷼", subtitle: "للشخص الواحد")
+                                    TicketCard(title: "دخول مجاني", price: "0 ﷼", subtitle: "أطفال < 2 / ذوي الهمم")
+                                }
+                            }
+                            .padding(.horizontal)
+                            
+                            // قسم شحن الرصيد
                             VStack(alignment: .leading, spacing: 15) {
-                                Text("🎮 عروض شحن الرصيد").font(.headline).foregroundColor(.white).padding(.horizontal)
+                                SectionTitle(title: "باقات الألعاب (VIP)")
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 15) {
-                                        Spacer().frame(width: 10)
+                                        Spacer().frame(width: 5)
                                         ForEach(packages) { pkg in
                                             VStack {
-                                                Text("ادفع \(Int(pkg.pay))").font(.caption).foregroundColor(.white.opacity(0.7))
-                                                Text("\(Int(pkg.get))").font(.title).bold().foregroundColor(.white)
-                                                Text("رصيد").font(.caption2).foregroundColor(.white)
+                                                Text("ادفع").font(.caption2).foregroundColor(.gray)
+                                                Text("\(Int(pkg.pay))").font(.title).bold().foregroundColor(.white)
+                                                Divider().background(Color.gray)
+                                                Text("رصيد").font(.caption2).foregroundColor(.luxuryGold)
+                                                Text("\(Int(pkg.get))").font(.headline).foregroundColor(.luxuryGold)
                                             }
-                                            .padding()
-                                            .frame(width: 110, height: 110)
-                                            .background(pkg.color.opacity(0.6))
-                                            .cornerRadius(16)
+                                            .frame(width: 100, height: 120)
+                                            .background(Color.glass) // خلفية زجاجية
+                                            .cornerRadius(20)
+                                            .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.1)))
                                         }
                                     }
                                 }
                             }
-                            .offset(y: -20)
                             
-                            // 5. زر الموقع
-                            Link(destination: googleMapsLink) {
-                                HStack {
-                                    Text("اتجه للموقع (Google Maps)")
-                                        .fontWeight(.bold)
-                                    Spacer()
-                                    Image(systemName: "paperplane.fill")
+                            // التواصل
+                            VStack(spacing: 20) {
+                                Divider().background(Color.white.opacity(0.1))
+                                Text("تواصل معنا").font(.caption).foregroundColor(.gray).tracking(2)
+                                HStack(spacing: 40) {
+                                    SocialIcon(icon: "phone.fill", url: "https://wa.me/966549949745")
+                                    SocialIcon(icon: "camera.fill", url: "https://www.snapchat.com/add/jsrlawzia")
+                                    SocialIcon(icon: "play.fill", url: "https://www.tiktok.com/@jsrlawzia")
                                 }
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
                             }
-                            .padding(.horizontal)
-                            
-                            Spacer().frame(height: 50)
+                            .padding(.bottom, 100)
                         }
                     }
                 }
@@ -237,29 +247,32 @@ struct HomeView: View {
     }
 }
 
-// --- 2. صفحة الحجوزات ---
+// --- 2. الحجوزات (Booking) ---
 struct BookingListView: View {
     let sessions = [
-        SessionType(name: "البلورات (القباب)", price: 80, features: "إطلالة بانورامية • تكييف", imageURL: "https://images.unsplash.com/photo-1649170343284-5806dd601e3c?w=800&q=80"),
-        SessionType(name: "الأكواخ الريفية", price: 100, features: "مطلة على النهر • خصوصية", imageURL: "https://images.unsplash.com/photo-1587061949409-02df41d5e562?w=800&q=80"),
-        SessionType(name: "بيوت الشعر", price: 90, features: "جلسة تراثية • دافئة", imageURL: "https://images.unsplash.com/photo-1550586678-f7b288a2983b?w=800&q=80")
+        SessionType(name: "البلورات الملكية", price: 80, features: "إطلالة بانورامية • تكييف", imageURL: "https://images.unsplash.com/photo-1649170343284-5806dd601e3c?w=800&q=80"),
+        SessionType(name: "أكواخ النهر", price: 100, features: "خصوصية تامة • صوت الماء", imageURL: "https://images.unsplash.com/photo-1587061949409-02df41d5e562?w=800&q=80"),
+        SessionType(name: "مجلس تراثي", price: 90, features: "أجواء دافئة • شبة نار", imageURL: "https://images.unsplash.com/photo-1550586678-f7b288a2983b?w=800&q=80")
     ]
     
     var body: some View {
         NavigationView {
             ZStack {
-                Color.black.edgesIgnoringSafeArea(.all)
+                Color.deepBlack.edgesIgnoringSafeArea(.all)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        Text("حجز الجلسات").font(.largeTitle).bold().foregroundColor(.white).padding(.top, 30).padding(.horizontal)
+                    VStack(alignment: .leading, spacing: 25) {
+                        Text("حجز الجلسات")
+                            .font(.system(size: 30, weight: .bold, design: .serif))
+                            .foregroundColor(.white)
+                            .padding(.top, 40).padding(.horizontal)
                         
                         ForEach(sessions) { session in
                             NavigationLink(destination: BookingFormView(session: session)) {
-                                SessionCardIOS(session: session)
+                                LuxurySessionCard(session: session)
                             }
                         }
-                        Text("⚠️ الحجز غير مسترد").font(.caption).foregroundColor(.gray).padding()
                     }
+                    .padding(.bottom, 50)
                 }
             }
             .navigationBarHidden(true)
@@ -267,104 +280,48 @@ struct BookingListView: View {
     }
 }
 
-// --- 3. صفحة الميزانية والحاسبة ---
-struct BudgetView: View {
-    @State private var people = 1
-    @State private var selectedPkg = 0.0
-    @State private var sessionPrice = 0.0
-    
-    var total: Int { Int((Double(people) * 15.0) + selectedPkg + sessionPrice) }
-    
-    var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.edgesIgnoringSafeArea(.all)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 25) {
-                        Text("حاسبة الميزانية").font(.largeTitle).bold().foregroundColor(.white).padding(.top, 30)
-                        
-                        VStack(alignment: .leading, spacing: 20) {
-                            HStack {
-                                Text("عدد الزوار (15 ريال/فرد)").foregroundColor(.white)
-                                Spacer()
-                                Stepper("\(people)", value: $people, in: 1...50).labelsHidden().background(Color.white).cornerRadius(8)
-                            }
-                            
-                            HStack {
-                                Text("شحن الألعاب").foregroundColor(.white)
-                                Spacer()
-                                Picker("", selection: $selectedPkg) {
-                                    Text("بدون").tag(0.0)
-                                    Text("100 (رصيد 110)").tag(100.0)
-                                    Text("300 (رصيد 350)").tag(300.0)
-                                    Text("750 (رصيد 1000)").tag(750.0)
-                                }.pickerStyle(MenuPickerStyle()).accentColor(.yellow)
-                            }
-                            
-                            HStack {
-                                Text("الجلسة").foregroundColor(.white)
-                                Spacer()
-                                Picker("", selection: $sessionPrice) {
-                                    Text("بدون").tag(0.0)
-                                    Text("بلورة (80)").tag(80.0)
-                                    Text("شعر (90)").tag(90.0)
-                                    Text("كوخ (100)").tag(100.0)
-                                }.pickerStyle(MenuPickerStyle()).accentColor(.yellow)
-                            }
-                            
-                            Divider().background(Color.gray)
-                            
-                            HStack {
-                                Text("الإجمالي المتوقع:").font(.title2).bold().foregroundColor(.white)
-                                Spacer()
-                                Text("\(total) ريال").font(.largeTitle).bold().foregroundColor(.green)
-                            }
-                        }
-                        .padding()
-                        .background(Color(UIColor.systemGray6).opacity(0.3))
-                        .cornerRadius(20)
-                        .padding(.horizontal)
-                        
-                        Spacer()
-                    }
-                    .padding()
-                }
-            }
-            .navigationBarHidden(true)
-        }
-    }
-}
-
-// --- 4. صفحة الخدمات ---
+// --- 3. الخدمات (Services) ---
 struct ServicesView: View {
     let services = [
-        ServiceItem(name: "قهوة/شاي", icon: "cup.and.saucer.fill"),
-        ServiceItem(name: "جمر", icon: "flame.fill"),
-        ServiceItem(name: "بطانيات", icon: "bed.double.fill"),
-        ServiceItem(name: "مساعدة", icon: "person.wave.2.fill")
+        ServiceItem(name: "الضيافة", icon: "cup.and.saucer.fill"),
+        ServiceItem(name: "تدفئة", icon: "flame.fill"),
+        ServiceItem(name: "أغطية", icon: "bed.double.fill"),
+        ServiceItem(name: "مساعدة", icon: "bell.fill")
     ]
+    @State private var lostItem = ""
     
     var body: some View {
         NavigationView {
             ZStack {
-                Color.black.edgesIgnoringSafeArea(.all)
+                Color.deepBlack.edgesIgnoringSafeArea(.all)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 30) {
-                        Text("الخدمات").font(.largeTitle).bold().foregroundColor(.white).padding(.top, 30)
+                    VStack(alignment: .leading, spacing: 35) {
+                        Text("الخدمات").font(.system(size: 30, weight: .bold, design: .serif)).foregroundColor(.white).padding(.top, 40)
                         
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 15) {
+                        // شبكة الخدمات
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 20) {
                             ForEach(services) { item in
-                                Button(action: { 
-                                    let msg = "طلب خدمة: \(item.name)".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                                    if let url = URL(string: "https://wa.me/966549949745?text=\(msg)") { UIApplication.shared.open(url) }
-                                }) {
+                                Button(action: { openWhatsApp(msg: "طلب خدمة: \(item.name)") }) {
                                     VStack {
-                                        Image(systemName: item.icon).font(.largeTitle).foregroundColor(.yellow)
-                                        Text(item.name).bold().foregroundColor(.white).padding(.top, 5)
+                                        Image(systemName: item.icon).font(.largeTitle).foregroundColor(.luxuryGold)
+                                        Text(item.name).font(.headline).foregroundColor(.white).padding(.top, 5)
                                     }
-                                    .frame(height: 100).frame(maxWidth: .infinity)
-                                    .background(Color(UIColor.systemGray6).opacity(0.3))
-                                    .cornerRadius(15)
+                                    .frame(height: 140).frame(maxWidth: .infinity)
+                                    .background(Color.glass).cornerRadius(25)
+                                    .overlay(RoundedRectangle(cornerRadius: 25).stroke(Color.white.opacity(0.05)))
+                                }
+                            }
+                        }
+                        
+                        // المفقودات
+                        VStack(alignment: .leading, spacing: 15) {
+                            Text("المفقودات").font(.headline).foregroundColor(.gray)
+                            HStack {
+                                TextField("اكتب الغرض المفقود...", text: $lostItem)
+                                    .padding().background(Color.glass).cornerRadius(15).foregroundColor(.white)
+                                Button(action: { openWhatsApp(msg: "بلاغ مفقودات: \(lostItem)") }) {
+                                    Image(systemName: "arrow.up.circle.fill")
+                                        .font(.largeTitle).foregroundColor(.luxuryGold)
                                 }
                             }
                         }
@@ -377,100 +334,188 @@ struct ServicesView: View {
     }
 }
 
-// ==========================================
-// MARK: - 6. المكونات (UI Components)
-// ==========================================
-
-// بطاقة الطقس البيضاء (Six Flags Style)
-struct SixFlagsWeatherCard: View {
-    @ObservedObject var weatherManager: WeatherManager
-    let forecast = [
-        (day: "الإثنين", icon: "sun.max.fill", temp: "26°", color: Color.orange),
-        (day: "الثلاثاء", icon: "cloud.fill", temp: "22°", color: Color.blue),
-        (day: "الأربعاء", icon: "cloud.rain.fill", temp: "19°", color: Color.gray),
-        (day: "الخميس", icon: "cloud.fog.fill", temp: "18°", color: Color.purple)
-    ]
+// --- 4. الميزانية (Calculator) ---
+struct BudgetView: View {
+    @State private var people = 1
+    @State private var pkgCost = 0.0
+    @State private var sessionCost = 0.0
+    var total: Int { Int((Double(people) * 15.0) + pkgCost + sessionCost) }
     
     var body: some View {
-        VStack(spacing: 15) {
-            HStack {
-                VStack(alignment: .leading) {
-                    HStack {
-                        Text(weatherManager.temperature).font(.system(size: 45, weight: .bold)).foregroundColor(.black)
-                        Image(systemName: weatherManager.icon).font(.system(size: 35)).foregroundColor(.orange)
+        NavigationView {
+            ZStack {
+                Color.deepBlack.edgesIgnoringSafeArea(.all)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 30) {
+                        Text("مخطط الرحلة").font(.system(size: 30, weight: .bold, design: .serif)).foregroundColor(.white).padding(.top, 40)
+                        
+                        VStack(alignment: .leading, spacing: 20) {
+                            // الأشخاص
+                            HStack {
+                                Text("الزوار").foregroundColor(.gray)
+                                Spacer()
+                                Stepper("\(people)", value: $people, in: 1...30).labelsHidden().background(Color.white).cornerRadius(8)
+                            }
+                            // الجلسة
+                            VStack(alignment: .leading) {
+                                Text("نوع الجلسة").foregroundColor(.gray)
+                                Picker("", selection: $sessionCost) {
+                                    Text("بدون").tag(0.0)
+                                    Text("بلورة (80)").tag(80.0)
+                                    Text("بيت شعر (90)").tag(90.0)
+                                    Text("كوخ (100)").tag(100.0)
+                                }.pickerStyle(SegmentedPickerStyle()).colorScheme(.dark)
+                            }
+                            // الألعاب
+                            VStack(alignment: .leading) {
+                                Text("رصيد الألعاب").foregroundColor(.gray)
+                                Picker("", selection: $pkgCost) {
+                                    Text("بدون").tag(0.0)
+                                    Text("100").tag(100.0)
+                                    Text("300").tag(300.0)
+                                    Text("750").tag(750.0)
+                                }.pickerStyle(SegmentedPickerStyle()).colorScheme(.dark)
+                            }
+                            
+                            Divider().background(Color.gray.opacity(0.3))
+                            
+                            HStack {
+                                Text("التكلفة التقديرية")
+                                Spacer()
+                                Text("\(total) ريال").font(.largeTitle).bold().foregroundColor(.luxuryGold)
+                            }
+                        }
+                        .padding(25)
+                        .background(Color.glass).cornerRadius(25)
+                        .overlay(RoundedRectangle(cornerRadius: 25).stroke(Color.luxuryGold.opacity(0.3), lineWidth: 1))
                     }
-                    Text(weatherManager.condition).font(.caption).bold().foregroundColor(.gray)
-                }
-                Spacer()
-                VStack(alignment: .trailing) {
-                    Text("الطقس اليوم").font(.caption).foregroundColor(.gray)
-                    Text("الشفا").bold().foregroundColor(.black)
+                    .padding()
                 }
             }
-            Divider()
-            HStack(spacing: 0) {
-                ForEach(forecast, id: \.day) { item in
-                    VStack(spacing: 5) {
-                        Text(item.day).font(.caption2).foregroundColor(.gray)
-                        Image(systemName: item.icon).foregroundColor(item.color)
-                        Text(item.temp).font(.caption).bold().foregroundColor(.black)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
+            .navigationBarHidden(true)
         }
-        .padding(20)
-        .background(Color.white)
-        .cornerRadius(20)
-        .shadow(radius: 10)
-        .padding(.horizontal)
     }
 }
 
-struct SessionCardIOS: View {
-    let session: SessionType
+// ==========================================
+// MARK: - 6. المكونات الفاخرة (UI Components)
+// ==========================================
+
+// بطاقة الطقس البيضاء (مثل Six Flags)
+struct WeatherCard: View {
+    @ObservedObject var manager: WeatherManager
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            AsyncImage(url: URL(string: session.imageURL)) { phase in
-                if let image = phase.image { image.resizable().scaledToFill().frame(height: 200).clipped() }
-                else { Color.gray.frame(height: 200) }
-            }
-            .overlay(LinearGradient(colors: [.clear, .black], startPoint: .center, endPoint: .bottom))
-            
+        HStack {
             VStack(alignment: .leading) {
                 HStack {
-                    Text(session.name).bold().foregroundColor(.white)
-                    Spacer()
-                    Text("\(Int(session.price)) ﷼").font(.caption).bold().padding(6).background(Color.yellow).foregroundColor(.black).cornerRadius(8)
+                    Text(manager.temperature).font(.system(size: 50, weight: .light)).foregroundColor(.black)
+                    Image(systemName: manager.icon).font(.largeTitle).foregroundColor(.luxuryGold)
                 }
-                Text(session.features).font(.caption).foregroundColor(.gray)
+                Text(manager.condition).font(.caption).bold().foregroundColor(.gray)
+            }
+            Spacer()
+            VStack(alignment: .trailing) {
+                Text("الطقس").font(.caption).foregroundColor(.gray)
+                Text("الشفا").font(.title3).bold().foregroundColor(.black)
+            }
+        }
+        .padding(25)
+        .background(Color.white)
+        .cornerRadius(25)
+        .padding(.horizontal)
+        .shadow(color: .black.opacity(0.2), radius: 20)
+    }
+}
+
+struct TicketCard: View {
+    let title: String, price: String, subtitle: String
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text(title).font(.caption).foregroundColor(.gray)
+            Text(price).font(.title).bold().foregroundColor(.white)
+            Text(subtitle).font(.caption2).foregroundColor(.green)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.glass)
+        .cornerRadius(15)
+    }
+}
+
+struct LuxurySessionCard: View {
+    let session: SessionType
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            AsyncImage(url: URL(string: session.imageURL)) { p in
+                if let i = p.image { i.resizable().scaledToFill() } else { Color.gray }
+            }
+            .frame(height: 240)
+            .clipped()
+            .overlay(LinearGradient(colors: [.deepBlack, .clear], startPoint: .bottom, endPoint: .center))
+            
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(session.name).font(.title3).bold().foregroundColor(.white)
+                    Text(session.features).font(.caption).foregroundColor(.gray)
+                }
+                Spacer()
+                Text("\(Int(session.price)) ﷼").font(.headline).foregroundColor(.black)
+                    .padding(10).background(Color.luxuryGold).cornerRadius(10)
             }
             .padding()
         }
-        .cornerRadius(16).padding(.horizontal)
+        .cornerRadius(25)
+        .padding(.horizontal)
     }
 }
 
 struct BookingFormView: View {
     let session: SessionType
-    @State private var name = ""; @State private var count = ""; @State private var date = Date()
+    @State private var name = ""; @State private var date = Date()
     var body: some View {
         ZStack {
-            Color.black.edgesIgnoringSafeArea(.all)
-            VStack(spacing: 20) {
-                Text("حجز \(session.name)").font(.title).bold().foregroundColor(.white).padding(.top)
-                TextField("الاسم", text: $name).padding().background(Color.white).cornerRadius(10).foregroundColor(.black).padding(.horizontal)
-                TextField("العدد", text: $count).keyboardType(.numberPad).padding().background(Color.white).cornerRadius(10).foregroundColor(.black).padding(.horizontal)
-                DatePicker("الوقت", selection: $date).colorScheme(.dark).padding(.horizontal)
+            Color.deepBlack.edgesIgnoringSafeArea(.all)
+            VStack(spacing: 25) {
+                Text(session.name).font(.title).foregroundColor(.luxuryGold).padding(.top)
+                VStack(spacing: 15) {
+                    TextField("الاسم", text: $name).padding().background(Color.white).cornerRadius(10).foregroundColor(.black)
+                    DatePicker("الموعد", selection: $date).colorScheme(.dark)
+                }
+                .padding().background(Color.glass).cornerRadius(20).padding()
+                
                 Button(action: {
                     let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd HH:mm"
-                    let msg = "حجز:\n🏠 \(session.name)\n👤 \(name)\n👥 \(count)\n📅 \(f.string(from: date))".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                    if let url = URL(string: "https://wa.me/966549949745?text=\(msg)") { UIApplication.shared.open(url) }
+                    let msg = "حجز جديد: \(session.name) - \(name) - \(f.string(from: date))"
+                    openWhatsApp(msg: msg)
                 }) {
-                    Text("تأكيد (واتساب)").bold().frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(15).padding()
+                    Text("تأكيد الحجز").bold().frame(maxWidth: .infinity).padding().background(Color.luxuryGold).foregroundColor(.black).cornerRadius(15)
                 }
+                .padding(.horizontal)
                 Spacer()
             }
         }
     }
+}
+
+struct SocialIcon: View {
+    let icon: String, url: String
+    var body: some View {
+        Button(action: { if let u = URL(string: url) { UIApplication.shared.open(u) } }) {
+            Image(systemName: icon).font(.system(size: 30)).foregroundColor(.white)
+                .padding(15).background(Color.glass).clipShape(Circle())
+        }
+    }
+}
+
+struct SectionTitle: View {
+    let title: String
+    var body: some View {
+        Text(title).font(.headline).foregroundColor(.white).padding(.leading, 5)
+            .overlay(Rectangle().fill(Color.luxuryGold).frame(width: 3, height: 20).offset(x: -10), alignment: .leading)
+    }
+}
+
+func openWhatsApp(msg: String) {
+    let encoded = msg.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+    if let url = URL(string: "https://wa.me/966549949745?text=\(encoded)") { UIApplication.shared.open(url) }
 }
